@@ -40,7 +40,8 @@ const timeout = time.Second * 5
 
 func TestReconcile(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	instance := &configurablehpav1beta1.ConfigurableHorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+	spec := configurablehpav1beta1.ConfigurableHorizontalPodAutoscalerSpec{DownscaleStabilizationWindowSeconds: 30}
+	instance := &configurablehpav1beta1.ConfigurableHorizontalPodAutoscaler{Spec: spec, ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
 	// channel when it is finished.

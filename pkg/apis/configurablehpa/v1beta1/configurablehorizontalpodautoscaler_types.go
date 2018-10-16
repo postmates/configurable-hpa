@@ -33,11 +33,21 @@ type CrossVersionObjectReference struct {
 
 // ConfigurableHorizontalPodAutoscalerSpec defines the desired state of ConfigurableHorizontalPodAutoscaler
 type ConfigurableHorizontalPodAutoscalerSpec struct {
-	DownscaleStabilizationWindowSeconds  int32   `json:"downscaleStabilizationWindow"`
-	DownscaleLimit                       int32   `json:"downscaleLimit,omitempty"`
-	Tolerance                            float64 `json:"tolerance,omitempty"`
-	CpuInitializationPeriodSeconds       int32   `json:"cpuInitializationPeriod,omitempty"`
-	DelayOfInitialReadinessStatusSeconds int32   `json:"delayOfInitialReadinessStatus,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=600
+	DownscaleStabilizationWindowSeconds int32 `json:"downscaleStabilizationWindowSeconds"`
+	// +kubebuilder:validation:Minimum=2
+	// +kubebuilder:validation:Maximum=100
+	DownscaleLimit int32 `json:"downscaleLimit,omitempty"`
+	// +kubebuilder:validation:Minimum=0.01
+	// +kubebuilder:validation:Maximum=0.99
+	Tolerance float64 `json:"tolerance,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=120
+	CpuInitializationPeriodSeconds int32 `json:"cpuInitializationPeriodSeconds,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=120
+	DelayOfInitialReadinessStatusSeconds int32 `json:"delayOfInitialReadinessStatusSeconds,omitempty"`
 }
 
 // ConfigurableHorizontalPodAutoscalerStatus defines the observed state of ConfigurableHorizontalPodAutoscaler

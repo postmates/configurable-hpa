@@ -34,7 +34,11 @@ func TestStorageConfigurableHorizontalPodAutoscaler(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "foo",
 			Namespace: "default",
-		}}
+		},
+		Spec: ConfigurableHorizontalPodAutoscalerSpec{
+			DownscaleStabilizationWindowSeconds: 300,
+		},
+	}
 	g := gomega.NewGomegaWithT(t)
 
 	// Test Create

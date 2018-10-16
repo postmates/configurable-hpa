@@ -22,23 +22,33 @@ spec:
           type: object
         spec:
           properties:
-            cpuInitializationPeriod:
+            cpuInitializationPeriodSeconds:
               format: int32
+              maximum: 120
+              minimum: 1
               type: integer
-            delayOfInitialReadinessStatus:
+            delayOfInitialReadinessStatusSeconds:
               format: int32
+              maximum: 120
+              minimum: 1
               type: integer
             downscaleLimit:
               format: int32
+              maximum: 100
+              minimum: 2
               type: integer
-            downscaleStabilizationWindow:
+            downscaleStabilizationWindowSeconds:
               format: int32
+              maximum: 600
+              minimum: 1
               type: integer
             tolerance:
               format: double
+              maximum: 0.99
+              minimum: 0.01
               type: number
           required:
-          - downscaleStabilizationWindow
+          - downscaleStabilizationWindowSeconds
           type: object
         status:
           properties:
