@@ -21,8 +21,42 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            cpuInitializationPeriod:
+              format: int32
+              type: integer
+            delayOfInitialReadinessStatus:
+              format: int32
+              type: integer
+            downscaleLimit:
+              format: int32
+              type: integer
+            downscaleStabilizationWindow:
+              format: int32
+              type: integer
+            tolerance:
+              format: double
+              type: number
+          required:
+          - downscaleStabilizationWindow
           type: object
         status:
+          properties:
+            currentReplicas:
+              format: int32
+              type: integer
+            desiredReplicas:
+              format: int32
+              type: integer
+            lastScaleTime:
+              format: date-time
+              type: string
+            observedGeneration:
+              format: int64
+              type: integer
+          required:
+          - currentReplicas
+          - desiredReplicas
           type: object
   version: v1beta1
 status:

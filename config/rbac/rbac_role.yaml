@@ -7,11 +7,19 @@ rules:
 - apiGroups:
   - apps
   resources:
-  - deployments
+  - replicasets
   verbs:
   - get
   - list
-  - watch
+  - update
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
   - create
   - update
   - patch
