@@ -42,13 +42,41 @@ spec:
               maximum: 600
               minimum: 1
               type: integer
+            maxReplicas:
+              format: int32
+              maximum: 1000
+              minimum: 1
+              type: integer
+            minReplicas:
+              format: int32
+              maximum: 1000
+              minimum: 1
+              type: integer
+            scaleTargetRef:
+              properties:
+                apiVersion:
+                  type: string
+                kind:
+                  type: string
+                name:
+                  type: string
+              required:
+              - kind
+              - name
+              type: object
+            targetCPUUtilizationPercentage:
+              format: int32
+              maximum: 100
+              minimum: 0
+              type: integer
             tolerance:
               format: double
               maximum: 0.99
               minimum: 0.01
               type: number
           required:
-          - downscaleStabilizationWindowSeconds
+          - scaleTargetRef
+          - maxReplicas
           type: object
         status:
           properties:

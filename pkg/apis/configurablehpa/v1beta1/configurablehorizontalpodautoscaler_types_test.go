@@ -36,7 +36,7 @@ func TestStorageConfigurableHorizontalPodAutoscaler(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: ConfigurableHorizontalPodAutoscalerSpec{
-			DownscaleStabilizationWindowSeconds: 300,
+			MaxReplicas: 100,
 		},
 	}
 	g := gomega.NewGomegaWithT(t)

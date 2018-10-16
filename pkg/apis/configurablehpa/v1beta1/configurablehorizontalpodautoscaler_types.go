@@ -31,11 +31,13 @@ type CrossVersionObjectReference struct {
 	APIVersion string `json:"apiVersion,omitempty"`
 }
 
-// ConfigurableHorizontalPodAutoscalerSpec defines the desired state of ConfigurableHorizontalPodAutoscaler
+// specification of horizontal pod autoscaler
+// was copied from HorizontalPodAutoscalerSpec + HPAControllerConfiguration
 type ConfigurableHorizontalPodAutoscalerSpec struct {
+	// part of HPAControllerConfiguration, see comments in the k8s repo: pkg/controller/apis/config/types.go
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=600
-	DownscaleStabilizationWindowSeconds int32 `json:"downscaleStabilizationWindowSeconds"`
+	DownscaleStabilizationWindowSeconds int32 `json:"downscaleStabilizationWindowSeconds,omitempty"`
 	// +kubebuilder:validation:Minimum=2
 	// +kubebuilder:validation:Maximum=100
 	DownscaleLimit int32 `json:"downscaleLimit,omitempty"`
@@ -48,6 +50,20 @@ type ConfigurableHorizontalPodAutoscalerSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=120
 	DelayOfInitialReadinessStatusSeconds int32 `json:"delayOfInitialReadinessStatusSeconds,omitempty"`
+
+	// part of HorizontalPodAutoscalerSpec, see comments in the k8s repo: staging/src/k8s.io/api/autoscaling/v1/types.go
+	// reference to scaled resource; horizontal pod autoscaler will learn the current resource consumption
+	// and will set the desired number of pods by using its Scale subresource.
+	ScaleTargetRef CrossVersionObjectReference `json:"scaleTargetRef"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=1000
+	MinReplicas *int32 `json:"minReplicas,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=1000
+	MaxReplicas int32 `json:"maxReplicas"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	TargetCPUUtilizationPercentage *int32 `json:"targetCPUUtilizationPercentage,omitempty"`
 }
 
 // ConfigurableHorizontalPodAutoscalerStatus defines the observed state of ConfigurableHorizontalPodAutoscaler

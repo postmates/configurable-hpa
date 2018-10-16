@@ -10,3 +10,9 @@ spec:
   tolerance: 0.1
   cpuInitializationPeriodSeconds: 20
   delayOfInitialReadinessStatusSeconds: 30
+  scaleTargetRef:
+    kind: ReplicaSet
+    name: foo
+  minReplicas: 2
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 42
