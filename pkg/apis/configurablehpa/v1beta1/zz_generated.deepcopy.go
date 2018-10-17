@@ -123,6 +123,11 @@ func (in *ConfigurableHorizontalPodAutoscalerStatus) DeepCopyInto(out *Configura
 		in, out := &in.LastScaleTime, &out.LastScaleTime
 		*out = (*in).DeepCopy()
 	}
+	if in.CurrentCPUUtilizationPercentage != nil {
+		in, out := &in.CurrentCPUUtilizationPercentage, &out.CurrentCPUUtilizationPercentage
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

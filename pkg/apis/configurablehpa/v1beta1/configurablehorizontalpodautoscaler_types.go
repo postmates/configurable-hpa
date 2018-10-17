@@ -37,10 +37,16 @@ type ConfigurableHorizontalPodAutoscalerSpec struct {
 	// part of HPAControllerConfiguration, see comments in the k8s repo: pkg/controller/apis/config/types.go
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=600
-	DownscaleStabilizationWindowSeconds int32 `json:"downscaleStabilizationWindowSeconds,omitempty"`
+	DownscaleForbiddenWindowSeconds int32 `json:"downscaleForbiddenWindowSeconds,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=600
+	UpscaleForbiddenWindowSeconds int32 `json:"upscaleForbiddenWindowSeconds,omitempty"`
 	// +kubebuilder:validation:Minimum=2
 	// +kubebuilder:validation:Maximum=100
 	DownscaleLimit int32 `json:"downscaleLimit,omitempty"`
+	// +kubebuilder:validation:Minimum=2
+	// +kubebuilder:validation:Maximum=100
+	UpscaleLimit int32 `json:"upscaleLimit,omitempty"`
 	// +kubebuilder:validation:Minimum=0.01
 	// +kubebuilder:validation:Maximum=0.99
 	Tolerance float64 `json:"tolerance,omitempty"`
@@ -68,10 +74,11 @@ type ConfigurableHorizontalPodAutoscalerSpec struct {
 
 // ConfigurableHorizontalPodAutoscalerStatus defines the observed state of ConfigurableHorizontalPodAutoscaler
 type ConfigurableHorizontalPodAutoscalerStatus struct {
-	ObservedGeneration *int64       `json:"observedGeneration,omitempty"`
-	LastScaleTime      *metav1.Time `json:"lastScaleTime,omitempty"`
-	CurrentReplicas    int32        `json:"currentReplicas"`
-	DesiredReplicas    int32        `json:"desiredReplicas"`
+	ObservedGeneration              *int64       `json:"observedGeneration,omitempty"`
+	LastScaleTime                   *metav1.Time `json:"lastScaleTime,omitempty"`
+	CurrentReplicas                 int32        `json:"currentReplicas"`
+	DesiredReplicas                 int32        `json:"desiredReplicas"`
+	CurrentCPUUtilizationPercentage *int32       `json:"currentCPUUtilizationPercentage,omitempty"`
 }
 
 // +genclient

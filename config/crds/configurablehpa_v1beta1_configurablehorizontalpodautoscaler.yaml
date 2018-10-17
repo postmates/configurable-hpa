@@ -32,15 +32,15 @@ spec:
               maximum: 120
               minimum: 1
               type: integer
+            downscaleForbiddenWindowSeconds:
+              format: int32
+              maximum: 600
+              minimum: 1
+              type: integer
             downscaleLimit:
               format: int32
               maximum: 100
               minimum: 2
-              type: integer
-            downscaleStabilizationWindowSeconds:
-              format: int32
-              maximum: 600
-              minimum: 1
               type: integer
             maxReplicas:
               format: int32
@@ -74,12 +74,25 @@ spec:
               maximum: 0.99
               minimum: 0.01
               type: number
+            upscaleForbiddenWindowSeconds:
+              format: int32
+              maximum: 600
+              minimum: 1
+              type: integer
+            upscaleLimit:
+              format: int32
+              maximum: 100
+              minimum: 2
+              type: integer
           required:
           - scaleTargetRef
           - maxReplicas
           type: object
         status:
           properties:
+            currentCPUUtilizationPercentage:
+              format: int32
+              type: integer
             currentReplicas:
               format: int32
               type: integer

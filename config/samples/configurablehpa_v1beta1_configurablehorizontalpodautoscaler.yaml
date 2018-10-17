@@ -5,8 +5,10 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: configurablehorizontalpodautoscaler-sample
 spec:
-  downscaleStabilizationWindowSeconds: 300
+  downscaleForbiddenWindowSeconds: 300
+  upscaleForbiddenWindowSeconds: 300
   downscaleLimit: 5
+  upscaleLimit: 4
   tolerance: 0.1
   cpuInitializationPeriodSeconds: 20
   delayOfInitialReadinessStatusSeconds: 30
