@@ -11,7 +11,7 @@ spec:
   cpuInitializationPeriodSeconds: 20
   delayOfInitialReadinessStatusSeconds: 30
   scaleTargetRef:
-    kind: ReplicaSet
+    kind: Deployment
     name: foo
   minReplicas: 2
   maxReplicas: 3

@@ -18,12 +18,15 @@ package configurablehorizontalpodautoscaler
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
-	configurablehpav1beta1 "github.com/postmates/configurable-hpa/pkg/apis/configurablehpa/v1beta1"
+	chpa "github.com/postmates/configurable-hpa/pkg/apis/configurablehpa/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -54,7 +57,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to ConfigurableHorizontalPodAutoscaler
-	err = c.Watch(&source.Kind{Type: &configurablehpav1beta1.ConfigurableHorizontalPodAutoscaler{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &chpa.ConfigurableHorizontalPodAutoscaler{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -80,19 +83,72 @@ type ReconcileConfigurableHorizontalPodAutoscaler struct {
 // +kubebuilder:rbac:groups=configurablehpa.k8s.io,resources=configurablehorizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileConfigurableHorizontalPodAutoscaler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the ConfigurableHorizontalPodAutoscaler instance
-	log.Printf("Reconcile request: %v\n", request)
-	instance := &configurablehpav1beta1.ConfigurableHorizontalPodAutoscaler{}
-	err := r.Get(context.TODO(), request.NamespacedName, instance)
+	log.Printf("\nReconcile request: %v\n", request)
+
+	// prepare results:
+	// resRepeat will be returned if we want to re-run reconcile process
+	resRepeat := reconcile.Result{RequeueAfter: defaultSyncPeriod}
+	// resStop will be returned in case if we found some problem that can't be fixed, and we want to stop repeating reconcile process
+	resStop := reconcile.Result{}
+
+	hpa := &chpa.ConfigurableHorizontalPodAutoscaler{}
+	err := r.Get(context.TODO(), request.NamespacedName, hpa)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Object not found, return.  Created objects are automatically garbage collected.
-			// For additional cleanup logic use finalizers.
-			return reconcile.Result{}, nil
+			// Object not found, return.  Do not repeat the Reconcile again
+			return resStop, nil
 		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
+		// Error reading the object (intermittent problems?) - requeue the request,
+		return resRepeat, err
 	}
 
-	log.Printf("instance spec: %v\n", instance.Spec)
-	return reconcile.Result{RequeueAfter: defaultSyncPeriod}, nil
+	log.Printf("  -> hpa spec: %v\n", hpa.Spec)
+	log.Printf("  -> hpa status: %v\n", hpa.Status)
+	hasValidSpec, err := isHPAValid(hpa)
+	if !hasValidSpec {
+		log.Printf("  -> invalid spec: %v\n", err)
+		// the hpa spec might change, we shouldn't stop repeating reconcile process
+		return resRepeat, err
+	}
+	log.Printf("  -> spec is valid")
+
+	// kind := hpa.Spec.ScaleTargetRef.Kind
+	namespace := hpa.Namespace
+	name := hpa.Spec.ScaleTargetRef.Name
+	namespacedName := types.NamespacedName{Namespace: namespace, Name: name}
+
+	deploy := &appsv1.Deployment{}
+	if r.Get(context.TODO(), namespacedName, deploy) != nil {
+		// Error reading the object, repeat later
+		return resRepeat, err
+	}
+
+	return r.ReconcileCHPA(hpa, deploy)
+}
+
+func (r *ReconcileConfigurableHorizontalPodAutoscaler) ReconcileCHPA(hpa *chpa.ConfigurableHorizontalPodAutoscaler, deploy *appsv1.Deployment) (reconcile.Result, error) {
+	// resRepeat will be returned if we want to re-run reconcile process
+	resRepeat := reconcile.Result{RequeueAfter: defaultSyncPeriod}
+	curReplicas := deploy.Status.Replicas
+	log.Printf("  -> current number of replicas: %v\n", curReplicas)
+
+	//cpuDesiredReplicas := int32(0)
+	//cpuCurrentUtilization := new(int32)
+	//cpuTimestamp := time.Time{}
+
+	return resRepeat, nil
+}
+
+func isHPAValid(hpa *chpa.ConfigurableHorizontalPodAutoscaler) (bool, error) {
+	if hpa.Spec.ScaleTargetRef.Kind != "Deployment" {
+		msg := fmt.Sprintf("configurable hpa doesn't support %s kind, use Deployment instead", hpa.Spec.ScaleTargetRef.Kind)
+		log.Printf(msg)
+		return false, fmt.Errorf(msg)
+	}
+	return isHPASpecValid(hpa.Spec)
+}
+
+func isHPASpecValid(spec chpa.ConfigurableHorizontalPodAutoscalerSpec) (bool, error) {
+	// TODO:
+	return true, nil
 }
