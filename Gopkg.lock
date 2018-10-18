@@ -580,6 +580,9 @@
   packages = [
     "pkg/apis/apiextensions",
     "pkg/apis/apiextensions/v1beta1",
+    "pkg/client/clientset/clientset",
+    "pkg/client/clientset/clientset/scheme",
+    "pkg/client/clientset/clientset/typed/apiextensions/v1beta1",
   ]
   pruneopts = "T"
   revision = "408db4a50408e2149acbd657bceb2480c13cb0a4"
@@ -739,12 +742,48 @@
   revision = "4242d8e6c5dba56827bb7bcf14ad11cda38f3991"
 
 [[projects]]
+  digest = "1:62d5f5ed198f4aaa1fc4e4b75e2be54a510ab6d36a4a01d4de22bc93049f6931"
+  name = "k8s.io/heapster"
+  packages = ["metrics/api/v1/types"]
+  pruneopts = "T"
+  revision = "105c0f2e84ae9dc6de5a0ce8e9dd7d15e9abf014"
+  version = "v1.5.4"
+
+[[projects]]
   branch = "master"
   digest = "1:2ced7786b9e3418e6b0428348771f14a72106668bbbc9da16403322ebf78dcb7"
   name = "k8s.io/kube-openapi"
   packages = ["pkg/util/proto"]
   pruneopts = "T"
   revision = "9dfdf9be683f61f82cda12362c44c784e0778b56"
+
+[[projects]]
+  digest = "1:d7341fe545bb645f177c2142acbeb69a0db0cdcd12074d2aecf199f79539c84e"
+  name = "k8s.io/kubernetes"
+  packages = ["pkg/controller/podautoscaler/metrics"]
+  pruneopts = "T"
+  revision = "a4529464e4629c21224b3d52edfe0ea91b072862"
+  version = "v1.11.3"
+
+[[projects]]
+  branch = "release-1.11"
+  digest = "1:c42d0ac160aebeae123cd081018be25fa4cbaa464d10cbdff2ce8c547d20b78b"
+  name = "k8s.io/metrics"
+  packages = [
+    "pkg/apis/custom_metrics",
+    "pkg/apis/custom_metrics/v1beta1",
+    "pkg/apis/external_metrics",
+    "pkg/apis/external_metrics/v1beta1",
+    "pkg/apis/metrics",
+    "pkg/apis/metrics/v1alpha1",
+    "pkg/apis/metrics/v1beta1",
+    "pkg/client/clientset_generated/clientset/scheme",
+    "pkg/client/clientset_generated/clientset/typed/metrics/v1beta1",
+    "pkg/client/custom_metrics",
+    "pkg/client/external_metrics",
+  ]
+  pruneopts = "T"
+  revision = "972ef826b8401c180b89cefc7457daa2d116daa9"
 
 [[projects]]
   digest = "1:4c3be496e0e0977b54e265fea184b57e9928fed12a1a14687c04b5d42e044abc"
@@ -756,6 +795,9 @@
     "pkg/client/apiutil",
     "pkg/client/config",
     "pkg/controller",
+    "pkg/controller/controllerutil",
+    "pkg/envtest",
+    "pkg/envtest/printer",
     "pkg/event",
     "pkg/handler",
     "pkg/internal/controller",
@@ -768,6 +810,7 @@
     "pkg/recorder",
     "pkg/runtime/inject",
     "pkg/runtime/log",
+    "pkg/runtime/scheme",
     "pkg/runtime/signals",
     "pkg/source",
     "pkg/source/internal",
@@ -813,14 +856,31 @@
     "github.com/emicklei/go-restful",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
+    "golang.org/x/net/context",
+    "k8s.io/api/apps/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
+    "k8s.io/apimachinery/pkg/api/errors",
+    "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",
+    "k8s.io/apimachinery/pkg/runtime/schema",
+    "k8s.io/apimachinery/pkg/types",
+    "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
+    "k8s.io/client-go/rest",
     "k8s.io/code-generator/cmd/deepcopy-gen",
+    "k8s.io/kubernetes/pkg/controller/podautoscaler/metrics",
+    "k8s.io/metrics/pkg/client/clientset_generated/clientset/typed/metrics/v1beta1",
+    "k8s.io/metrics/pkg/client/custom_metrics",
+    "k8s.io/metrics/pkg/client/external_metrics",
+    "sigs.k8s.io/controller-runtime/pkg/client",
     "sigs.k8s.io/controller-runtime/pkg/client/config",
     "sigs.k8s.io/controller-runtime/pkg/controller",
+    "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil",
+    "sigs.k8s.io/controller-runtime/pkg/envtest",
     "sigs.k8s.io/controller-runtime/pkg/handler",
     "sigs.k8s.io/controller-runtime/pkg/manager",
+    "sigs.k8s.io/controller-runtime/pkg/reconcile",
+    "sigs.k8s.io/controller-runtime/pkg/runtime/scheme",
     "sigs.k8s.io/controller-runtime/pkg/runtime/signals",
     "sigs.k8s.io/controller-runtime/pkg/source",
     "sigs.k8s.io/controller-tools/cmd/controller-gen",
