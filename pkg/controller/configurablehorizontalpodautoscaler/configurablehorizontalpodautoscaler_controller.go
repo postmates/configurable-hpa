@@ -29,6 +29,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/kubernetes/pkg/controller/podautoscaler/metrics"
+	resourceclient "k8s.io/metrics/pkg/client/clientset_generated/clientset/typed/metrics/v1beta1"
+	"k8s.io/metrics/pkg/client/custom_metrics"
+	"k8s.io/metrics/pkg/client/external_metrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -39,10 +44,12 @@ import (
 )
 
 const (
+	//podSyncPeriod                         = time.Second * 1
 	defaultSyncPeriod                     = time.Second * 15
 	defaultTargetCPUUtilizationPercentage = 80
 	scaleUpLimitMinimum                   = 4
 	scaleUpLimitFactor                    = 2
+	tolerance                             = 0.1
 )
 
 // Add creates a new ConfigurableHorizontalPodAutoscaler Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -53,7 +60,23 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileConfigurableHorizontalPodAutoscaler{Client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	clientConfig := mgr.GetConfig()
+	metricsClient := metrics.NewRESTMetricsClient(
+		resourceclient.NewForConfigOrDie(clientConfig),
+		custom_metrics.NewForConfigOrDie(clientConfig),
+		external_metrics.NewForConfigOrDie(clientConfig),
+	)
+	fmt.Printf("hello: %v\n", metricsClient)
+	clientSet, err := kubernetes.NewForConfig(clientConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pods2, _ := clientSet.CoreV1().Pods("default").List(metav1.ListOptions{})
+	fmt.Printf("mylister pods2: %v\n", pods2)
+
+	replicaCalc := NewReplicaCalculator(metricsClient, clientSet.CoreV1())
+	return &ReconcileConfigurableHorizontalPodAutoscaler{Client: mgr.GetClient(), scheme: mgr.GetScheme(), clientSet: clientSet, replicaCalc: replicaCalc}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -78,8 +101,11 @@ var _ reconcile.Reconciler = &ReconcileConfigurableHorizontalPodAutoscaler{}
 // ReconcileConfigurableHorizontalPodAutoscaler reconciles a ConfigurableHorizontalPodAutoscaler object
 type ReconcileConfigurableHorizontalPodAutoscaler struct {
 	client.Client
-	scheme     *runtime.Scheme
-	syncPeriod time.Duration
+	//replicaCalculator *podautoscaler.ReplicaCalculator
+	scheme      *runtime.Scheme
+	clientSet   kubernetes.Interface
+	syncPeriod  time.Duration
+	replicaCalc *ReplicaCalculator
 }
 
 // Reconcile reads that state of the cluster for a ConfigurableHorizontalPodAutoscaler object and makes changes based on the state read
@@ -87,7 +113,7 @@ type ReconcileConfigurableHorizontalPodAutoscaler struct {
 // The implementation repeats kubernetes hpa implementation in v1.5.8
 //		(last version before k8s.io/api/autoscaling/v2beta1 MetricsSpec was added)
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// TODO: decide, what to use: patch or update
+// TODO: decide, what to use: patch or update in rbac
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get;list;update;patch
 // +kubebuilder:rbac:groups=apps,resources=pods,verbs=get;list;create;update;patch;delete
 // +kubebuilder:rbac:groups=configurablehpa.k8s.io,resources=configurablehorizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete

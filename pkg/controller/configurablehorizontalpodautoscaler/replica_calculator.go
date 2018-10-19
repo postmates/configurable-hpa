@@ -14,26 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package podautoscaler
+// copy of ./pkg/controller/configurablehorizontalpodautoscaler/replica_calculator.go
+// from kubernetes-1.5.8
+//  + some fixes to compile it
+package configurablehorizontalpodautoscaler
 
 import (
 	"fmt"
 	"math"
 	"time"
 
-	"k8s.io/kubernetes/pkg/api"
-	unversionedcore "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
+	apiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/sets"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	podv1 "k8s.io/kubernetes/pkg/api/v1/pod"
 	metricsclient "k8s.io/kubernetes/pkg/controller/podautoscaler/metrics"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/util/sets"
 )
 
 type ReplicaCalculator struct {
 	metricsClient metricsclient.MetricsClient
-	podsGetter    unversionedcore.PodsGetter
+	podsGetter    corev1.PodsGetter
 }
 
-func NewReplicaCalculator(metricsClient metricsclient.MetricsClient, podsGetter unversionedcore.PodsGetter) *ReplicaCalculator {
+func NewReplicaCalculator(metricsClient metricsclient.MetricsClient, podsGetter corev1.PodsGetter) *ReplicaCalculator {
 	return &ReplicaCalculator{
 		metricsClient: metricsClient,
 		podsGetter:    podsGetter,
@@ -42,13 +47,19 @@ func NewReplicaCalculator(metricsClient metricsclient.MetricsClient, podsGetter 
 
 // GetResourceReplicas calculates the desired replica count based on a target resource utilization percentage
 // of the given resource for pods matching the given selector in the given namespace, and the current replica count
-func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUtilization int32, resource api.ResourceName, namespace string, selector labels.Selector) (replicaCount int32, utilization int32, timestamp time.Time, err error) {
-	metrics, timestamp, err := c.metricsClient.GetResourceMetric(resource, namespace, selector)
+func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUtilization int32, resource apiv1.ResourceName, namespace string, selector string) (replicaCount int32, utilization int32, timestamp time.Time, err error) {
+	labelsMap, err := labels.ConvertSelectorToLabelsMap(selector)
+	if err != nil {
+		return 0, 0, time.Time{}, fmt.Errorf("unable to convert selector '%s' to labels map: %v", selector, err)
+	}
+
+	labelsSelector := labelsMap.AsSelector()
+	metrics, timestamp, err := c.metricsClient.GetResourceMetric(resource, namespace, labelsSelector)
 	if err != nil {
 		return 0, 0, time.Time{}, fmt.Errorf("unable to get metrics for resource %s: %v", resource, err)
 	}
 
-	podList, err := c.podsGetter.Pods(namespace).List(api.ListOptions{LabelSelector: selector})
+	podList, err := c.podsGetter.Pods(namespace).List(metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
 		return 0, 0, time.Time{}, fmt.Errorf("unable to get pods while calculating replica count: %v", err)
 	}
@@ -74,7 +85,7 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 
 		requests[pod.Name] = podSum
 
-		if pod.Status.Phase != api.PodRunning || !api.IsPodReady(&pod) {
+		if pod.Status.Phase != apiv1.PodRunning || !podv1.IsPodReady(&pod) {
 			// save this pod name for later, but pretend it doesn't exist for now
 			unreadyPods.Insert(pod.Name)
 			delete(metrics, pod.Name)
@@ -94,7 +105,7 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 		return 0, 0, time.Time{}, fmt.Errorf("did not receive metrics for any ready pods")
 	}
 
-	usageRatio, utilization, err := metricsclient.GetResourceUtilizationRatio(metrics, requests, targetUtilization)
+	usageRatio, utilization, _, err := metricsclient.GetResourceUtilizationRatio(metrics, requests, targetUtilization)
 	if err != nil {
 		return 0, 0, time.Time{}, err
 	}
@@ -132,7 +143,7 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 	}
 
 	// re-run the utilization calculation with our new numbers
-	newUsageRatio, _, err := metricsclient.GetResourceUtilizationRatio(metrics, requests, targetUtilization)
+	newUsageRatio, _, _, err := metricsclient.GetResourceUtilizationRatio(metrics, requests, targetUtilization)
 	if err != nil {
 		return 0, utilization, time.Time{}, err
 	}
@@ -150,13 +161,20 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 
 // GetMetricReplicas calculates the desired replica count based on a target resource utilization percentage
 // of the given resource for pods matching the given selector in the given namespace, and the current replica count
-func (c *ReplicaCalculator) GetMetricReplicas(currentReplicas int32, targetUtilization float64, metricName string, namespace string, selector labels.Selector) (replicaCount int32, utilization float64, timestamp time.Time, err error) {
-	metrics, timestamp, err := c.metricsClient.GetRawMetric(metricName, namespace, selector)
+func (c *ReplicaCalculator) GetMetricReplicas(currentReplicas int32, targetUtilization float64, metricName string, namespace string, selector string) (replicaCount int32, utilization float64, timestamp time.Time, err error) {
+	labelsMap, err := labels.ConvertSelectorToLabelsMap(selector)
+	if err != nil {
+		return 0, 0, time.Time{}, fmt.Errorf("unable to convert selector '%s' to labels map: %v", selector, err)
+	}
+
+	labelsSelector := labelsMap.AsSelector()
+
+	metrics, timestamp, err := c.metricsClient.GetRawMetric(metricName, namespace, labelsSelector)
 	if err != nil {
 		return 0, 0, time.Time{}, fmt.Errorf("unable to get metric  %s: %v", metricName, err)
 	}
 
-	podList, err := c.podsGetter.Pods(namespace).List(api.ListOptions{LabelSelector: selector})
+	podList, err := c.podsGetter.Pods(namespace).List(metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
 		return 0, 0, time.Time{}, fmt.Errorf("unable to get pods while calculating replica count: %v", err)
 	}
@@ -170,7 +188,7 @@ func (c *ReplicaCalculator) GetMetricReplicas(currentReplicas int32, targetUtili
 	missingPods := sets.NewString()
 
 	for _, pod := range podList.Items {
-		if pod.Status.Phase != api.PodRunning || !api.IsPodReady(&pod) {
+		if pod.Status.Phase != apiv1.PodRunning || !podv1.IsPodReady(&pod) {
 			// save this pod name for later, but pretend it doesn't exist for now
 			unreadyPods.Insert(pod.Name)
 			delete(metrics, pod.Name)
@@ -190,7 +208,8 @@ func (c *ReplicaCalculator) GetMetricReplicas(currentReplicas int32, targetUtili
 		return 0, 0, time.Time{}, fmt.Errorf("did not recieve metrics for any ready pods")
 	}
 
-	usageRatio, utilization := metricsclient.GetMetricUtilizationRatio(metrics, targetUtilization)
+	usageRatio, tmp_utilization := metricsclient.GetMetricUtilizationRatio(metrics, int64(targetUtilization))
+	utilization = float64(tmp_utilization) // emulate newer version of metrcisclient
 	if err != nil {
 		return 0, 0, time.Time{}, err
 	}
@@ -211,7 +230,7 @@ func (c *ReplicaCalculator) GetMetricReplicas(currentReplicas int32, targetUtili
 		if usageRatio < 1.0 {
 			// on a scale-down, treat missing pods as using 100% of the resource request
 			for podName := range missingPods {
-				metrics[podName] = targetUtilization
+				metrics[podName] = int64(targetUtilization)
 			}
 		} else {
 			// on a scale-up, treat missing pods as using 0% of the resource request
@@ -229,7 +248,7 @@ func (c *ReplicaCalculator) GetMetricReplicas(currentReplicas int32, targetUtili
 	}
 
 	// re-run the utilization calculation with our new numbers
-	newUsageRatio, _ := metricsclient.GetMetricUtilizationRatio(metrics, targetUtilization)
+	newUsageRatio, _ := metricsclient.GetMetricUtilizationRatio(metrics, int64(targetUtilization))
 	if err != nil {
 		return 0, utilization, time.Time{}, err
 	}
