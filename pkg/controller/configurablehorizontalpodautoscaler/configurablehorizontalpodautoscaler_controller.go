@@ -325,6 +325,7 @@ func (r *ReconcileConfigurableHorizontalPodAutoscaler) computeReplicasForCPUUtil
 	}
 
 	desiredReplicas, utilization, timestamp, err := r.replicaCalc.GetResourceReplicas(currentReplicas, targetUtilization, ResourceCPU, hpa.Namespace, selector)
+	log.Printf("desiredReplicas: %v, utilization: %v\n", desiredReplicas, utilization)
 	if err != nil {
 		lastScaleTime := getLastScaleTime(hpa)
 		if time.Now().After(lastScaleTime.Add(upscaleForbiddenWindow)) {

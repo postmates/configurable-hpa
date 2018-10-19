@@ -21,6 +21,7 @@ package configurablehorizontalpodautoscaler
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"time"
 
@@ -54,6 +55,7 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 		return 0, 0, time.Time{}, fmt.Errorf("unable to get metrics for resource %s: %v", resource, err)
 	}
 
+	log.Printf("metrics: %v\n", metrics)
 	podList, err := c.podsGetter.Pods(namespace).List(metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
 		return 0, 0, time.Time{}, fmt.Errorf("unable to get pods while calculating replica count: %v", err)
@@ -73,12 +75,14 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 		for _, container := range pod.Spec.Containers {
 			if containerRequest, ok := container.Resources.Requests[resource]; ok {
 				podSum += containerRequest.MilliValue()
+				log.Printf("GetResourceReplicas: container %s req:%v  -> podSum=%v\n", container.Name, containerRequest.MilliValue(), podSum)
 			} else {
 				return 0, 0, time.Time{}, fmt.Errorf("missing request for %s on container %s in pod %s/%s", resource, container.Name, namespace, pod.Name)
 			}
 		}
 
 		requests[pod.Name] = podSum
+		log.Printf("total for %s: %v\n", pod.Name, podSum)
 
 		if pod.Status.Phase != apiv1.PodRunning || !podv1.IsPodReady(&pod) {
 			// save this pod name for later, but pretend it doesn't exist for now
@@ -101,6 +105,7 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 	}
 
 	usageRatio, utilization, _, err := metricsclient.GetResourceUtilizationRatio(metrics, requests, targetUtilization)
+	log.Printf("usageRatio: %v, utilization: %v\n", usageRatio, utilization)
 	if err != nil {
 		return 0, 0, time.Time{}, err
 	}
@@ -139,6 +144,7 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 
 	// re-run the utilization calculation with our new numbers
 	newUsageRatio, _, _, err := metricsclient.GetResourceUtilizationRatio(metrics, requests, targetUtilization)
+	log.Printf("newUsageRatio: %v\n", newUsageRatio)
 	if err != nil {
 		return 0, utilization, time.Time{}, err
 	}
