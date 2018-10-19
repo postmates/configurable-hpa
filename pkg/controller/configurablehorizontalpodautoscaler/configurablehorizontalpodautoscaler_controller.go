@@ -50,6 +50,9 @@ const (
 	scaleUpLimitMinimum                   = 4
 	scaleUpLimitFactor                    = 2
 	tolerance                             = 0.1
+	ResourceCPU                           = "cpu" // FIXME: was api.resourceCPU
+	downscaleForbiddenWindow              = 5 * time.Minute
+	upscaleForbiddenWindow                = 3 * time.Minute
 )
 
 // Add creates a new ConfigurableHorizontalPodAutoscaler Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -300,9 +303,51 @@ func shouldScale(hpa *chpa.ConfigurableHorizontalPodAutoscaler, currentReplicas,
 }
 
 func (r *ReconcileConfigurableHorizontalPodAutoscaler) computeReplicasForCPUUtilization(hpa *chpa.ConfigurableHorizontalPodAutoscaler, deploy *appsv1.Deployment) (int32, *int32, time.Time, error) {
-	utilization := int32(70)
-	return 2, &utilization, time.Now(), nil
+	targetUtilization := int32(defaultTargetCPUUtilizationPercentage)
+	if hpa.Spec.TargetCPUUtilizationPercentage != nil {
+		targetUtilization = *hpa.Spec.TargetCPUUtilizationPercentage
+	}
+	currentReplicas := deploy.Status.Replicas
+
+	if deploy.Spec.Selector == nil {
+		errMsg := "selector is required"
+		log.Printf("%s\n", errMsg)
+		// a.eventRecorder.Event(hpa, api.EventTypeWarning, "SelectorRequired", errMsg)
+		return 0, nil, time.Time{}, fmt.Errorf(errMsg)
+	}
+
+	selector, err := metav1.LabelSelectorAsSelector(deploy.Spec.Selector)
+	if err != nil {
+		errMsg := fmt.Sprintf("couldn't convert selector string to a corresponding selector object: %v", err)
+		log.Printf("%s\n", errMsg)
+		//a.eventRecorder.Event(hpa, api.EventTypeWarning, "InvalidSelector", errMsg)
+		return 0, nil, time.Time{}, fmt.Errorf(errMsg)
+	}
+
+	desiredReplicas, utilization, timestamp, err := r.replicaCalc.GetResourceReplicas(currentReplicas, targetUtilization, ResourceCPU, hpa.Namespace, selector)
+	if err != nil {
+		lastScaleTime := getLastScaleTime(hpa)
+		if time.Now().After(lastScaleTime.Add(upscaleForbiddenWindow)) {
+			log.Printf("FailedGetMetrics: %v\n", err)
+			//a.eventRecorder.Event(hpa, api.EventTypeWarning, "FailedGetMetrics", err.Error())
+		} else {
+			log.Printf("MetricsNotAvailableYet: %v\n", err)
+			//a.eventRecorder.Event(hpa, api.EventTypeNormal, "MetricsNotAvailableYet", err.Error())
+		}
+
+		return 0, nil, time.Time{}, fmt.Errorf("failed to get CPU utilization: %v", err)
+	}
+
+	if desiredReplicas != currentReplicas {
+		//a.eventRecorder.Eventf(hpa, api.EventTypeNormal, "DesiredReplicasComputed",
+		//	"Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
+		log.Printf("Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
+			desiredReplicas, utilization, deploy.Status.Replicas)
+	}
+
+	return desiredReplicas, &utilization, timestamp, nil
 }
+
 func (r *ReconcileConfigurableHorizontalPodAutoscaler) updateStatus(hpa *chpa.ConfigurableHorizontalPodAutoscaler, currentReplicas, desiredReplicas int32, cpuCurrentUtilization *int32, rescale bool) error {
 	hpa.Status.CurrentReplicas = currentReplicas
 	hpa.Status.DesiredReplicas = desiredReplicas
@@ -314,4 +359,13 @@ func (r *ReconcileConfigurableHorizontalPodAutoscaler) updateStatus(hpa *chpa.Co
 	}
 
 	return nil
+}
+
+// getLastScaleTime returns the hpa's last scale time or the hpa's creation time if the last scale time is nil.
+func getLastScaleTime(hpa *chpa.ConfigurableHorizontalPodAutoscaler) time.Time {
+	lastScaleTime := hpa.Status.LastScaleTime
+	if lastScaleTime == nil {
+		lastScaleTime = &hpa.CreationTimestamp
+	}
+	return lastScaleTime.Time
 }

@@ -47,13 +47,8 @@ func NewReplicaCalculator(metricsClient metricsclient.MetricsClient, podsGetter 
 
 // GetResourceReplicas calculates the desired replica count based on a target resource utilization percentage
 // of the given resource for pods matching the given selector in the given namespace, and the current replica count
-func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUtilization int32, resource apiv1.ResourceName, namespace string, selector string) (replicaCount int32, utilization int32, timestamp time.Time, err error) {
-	labelsMap, err := labels.ConvertSelectorToLabelsMap(selector)
-	if err != nil {
-		return 0, 0, time.Time{}, fmt.Errorf("unable to convert selector '%s' to labels map: %v", selector, err)
-	}
-
-	labelsSelector := labelsMap.AsSelector()
+func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUtilization int32, resource apiv1.ResourceName, namespace string, labelsSelector labels.Selector) (replicaCount int32, utilization int32, timestamp time.Time, err error) {
+	selector := labelsSelector.String()
 	metrics, timestamp, err := c.metricsClient.GetResourceMetric(resource, namespace, labelsSelector)
 	if err != nil {
 		return 0, 0, time.Time{}, fmt.Errorf("unable to get metrics for resource %s: %v", resource, err)
@@ -161,14 +156,8 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 
 // GetMetricReplicas calculates the desired replica count based on a target resource utilization percentage
 // of the given resource for pods matching the given selector in the given namespace, and the current replica count
-func (c *ReplicaCalculator) GetMetricReplicas(currentReplicas int32, targetUtilization float64, metricName string, namespace string, selector string) (replicaCount int32, utilization float64, timestamp time.Time, err error) {
-	labelsMap, err := labels.ConvertSelectorToLabelsMap(selector)
-	if err != nil {
-		return 0, 0, time.Time{}, fmt.Errorf("unable to convert selector '%s' to labels map: %v", selector, err)
-	}
-
-	labelsSelector := labelsMap.AsSelector()
-
+func (c *ReplicaCalculator) GetMetricReplicas(currentReplicas int32, targetUtilization float64, metricName string, namespace string, labelsSelector labels.Selector) (replicaCount int32, utilization float64, timestamp time.Time, err error) {
+	selector := labelsSelector.String()
 	metrics, timestamp, err := c.metricsClient.GetRawMetric(metricName, namespace, labelsSelector)
 	if err != nil {
 		return 0, 0, time.Time{}, fmt.Errorf("unable to get metric  %s: %v", metricName, err)
