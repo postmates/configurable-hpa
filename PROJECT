@@ -1,0 +1,3 @@
+version: "1"
+domain: postmates.com
+repo: github.com/postmates/configurable-hpa
