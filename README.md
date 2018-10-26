@@ -127,8 +127,9 @@ Here's a list of things that must be done next:
 - (done) Check RBAC rules
 - (done) Check how several chpa objects works together
 - (done) Check OWNERship (solution: add `--cascade=false` parameter)
-- Add "events" system to the chpa (as in hpa) to show problems/events with each particular deployment scaling process
+- Add unittests to the CI pipeline
 - Add e2e tests
+- Add "events" system to the chpa (as in hpa) to show problems/events with each particular deployment scaling process
 - Add more checks into `isHPAValid` and `isHPASpecValid`
 - Check how to deal with CHPA version change v1beta1 -> v1beta2
 - (probably) log
