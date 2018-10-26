@@ -116,8 +116,26 @@ When we delete the owner of the deployment, the deployment is garbage collected.
 We don't want to leave the garbage behind
 
 ```bash
-kubectl delete deploy/my-load-generator service/my-load-generator deploy/chpa-example2
+kubectl delete deploy/my-load-generator deploy/chpa-example2
 ```
+
+# Development
+
+To make tests work you need to have [kubebuilder](https://book.kubebuilder.io/) installed
+
+To install CHPA to k8s for now manual helm is used (to be added to the CI pipeline later)
+
+Install to the `admin` cluster:
+
+    helm --kube-context admin.us-east-2.aws.k8s --tiller-namespace kube-system upgrade configurable-hpa deployment/helm/configurable-hpa --install --namespace kube-system --wait=true --values deployment/environments/ci/values.yaml --set=image.tag=v1beta1-9-3cf57c22 --debug
+
+Install to the `stage` cluster:
+
+    helm --kube-context stage.us-west-2.aws.k8s --tiller-namespace kube-system upgrade configurable-hpa deployment/helm/configurable-hpa --install --namespace kube-system --wait=true --values deployment/environments/stage/values.yaml --set=image.tag=v1beta1-9-3cf57c22 --debug
+
+To get chpa-controller:
+
+    stern -n kube-system configurable-hpa
 
 # TODO
 
