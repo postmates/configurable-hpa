@@ -1,0 +1,84 @@
+# vim: set ts=2 sts=2 sw=2 et:
+workspace:
+  base: /go
+  path: src/github.com/postmates/configurable-hpa
+
+pipeline:
+  #test-sources:
+  #  image: quay.io/postmates/configurable-hpa:test-v1
+  #  commands:
+  #    - make test
+  #  when:
+  #    event: [push]
+
+  build-image:
+    image: plugins/docker
+    registry: quay.io
+    repo: quay.io/postmates/configurable-hpa
+    tags:
+      - v1beta1-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
+    secrets:
+      - source: global_quay_username
+        target: docker_username
+      - source: global_quay_password
+        target: docker_password
+    when:
+      event: [push]
+
+  install-to-ci-k8s:
+    image: quay.io/postmates/helm-deploy
+    pull: true
+    secrets:
+      - source: global_ci_kubernetes_token
+        target: ci_kubernetes_token
+    server: https://k8s-api.admin.us-east-2.postmates.com
+    verbose: true
+    namespace: ci
+    release: configurable-hpa-${DRONE_BUILD_NUMBER}
+    chart: deployment/helm/configurable-hpa
+    values: deployment/environments/ci/values.yaml
+    set: image.tag=v1beta1-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
+    wait: true
+    when:
+      event: [push]
+
+
+  deploy-stage:
+    image: quay.io/postmates/helm-deploy
+    pull: true
+    secrets:
+      - source: stage_kubernetes_token
+        target: ci_kubernetes_token
+    server: https://k8s-api.stage.us-west-2.postmates.com
+    namespace: kube-system
+    release: configurable-hpa
+    chart: deployment/helm/configurable-hpa
+    values: deployment/environments/stage/values.yaml
+    update_deps: true
+    # Note: we use parent build number in the image tag below to reference the docker image
+    # which was built by the promoted build.
+    set: image.tag=v1beta1-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
+    wait: true
+    when:
+      event: [deployment]
+      environment: [stage]
+
+  deploy-prod:
+    image: quay.io/postmates/helm-deploy
+    pull: true
+    secrets:
+      - source: prod_kubernetes_token
+        target: ci_kubernetes_token
+    server: https://k8s-api.prod.us-west-1.postmates.com
+    namespace: kube-system
+    release: configurable-hpa
+    chart: deployment/helm/configurable-hpa
+    values: deployment/environments/prod/values.yaml
+    update_deps: true
+    # Note: we use parent build number in the image tag below to reference the docker image
+    # which was built by the promoted build.
+    set: image.tag=v1beta1-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
+    wait: true
+    when:
+      event: [deployment]
+      environment: [prod]

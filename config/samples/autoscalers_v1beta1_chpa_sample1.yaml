@@ -1,0 +1,16 @@
+apiVersion: autoscalers.postmates.com/v1beta1
+kind: CHPA
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: chpa-sample1
+spec:
+  downscaleForbiddenWindowSeconds: 300
+  upscaleForbiddenWindowSeconds: 300
+  tolerance: 0.1
+  scaleTargetRef:
+    kind: Deployment
+    name: chpa-example1
+  minReplicas: 2
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 42
