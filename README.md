@@ -108,7 +108,7 @@ deployment itself. To do it just add `--cascade=false` parameter to the `kubect 
 
     kubectl delete chpas.autoscalers.postmates.com chpa-sample2 --cascade=false
 
-The thing is that CHPA is registered as an [Owner](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.12/#ownerreference-v1-meta) for the deployment.
+The thing is that CHPA is registered as an [Owner](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.10/#ownerreference-v1-meta) for the deployment.
 When we delete the owner of the deployment, the deployment is garbage collected.
 
 ## Clean everything else
