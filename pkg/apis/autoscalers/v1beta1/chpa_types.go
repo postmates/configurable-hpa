@@ -31,7 +31,7 @@ type CrossVersionObjectReference struct {
 	APIVersion string `json:"apiVersion,omitempty"`
 }
 
-// Confirgurable HPA (CHPA) controller starts every 15 seconds, on every iteration it follows the instruction:
+// Configurable HPA (CHPA) controller starts every 15 seconds, on every iteration it follows the instruction:
 //		* check all CHPA objects
 //		* for every CHPA object find the correspondend Deployment object
 //		* check metrics for all the Containers for all the Pods of the Deployment object
