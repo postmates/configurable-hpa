@@ -4,6 +4,8 @@ NB: The work is still in progress
 
 WARNING: If you want to delete your CHPA, do it carefully not to remove your deployment too. Read the "Quick Start Guide" below.
 
+WARNING: You should remove usual HPA before starting using CHPA. If you use both, the behaviour is undefined (they'll fight each other).
+
 Vanilla kubernetes [HPA (Horizontal Pod Autoscaler)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) doesn't allow to configure some HPA parameters, such as:
 
  - [DownscaleForbiddenWindow](https://github.com/kubernetes/website/blob/snapshot-initial-v1.11/content/en/docs/tasks/run-application/horizontal-pod-autoscale.md#support-for-cooldowndelay)
@@ -151,5 +153,6 @@ Here's a list of things that must be done next:
 - Add e2e tests
 - Add "events" system to the chpa (as in hpa) to show problems/events with each particular deployment scaling process
 - Add more checks into `isHPAValid` and `isHPASpecValid`
+- Add check that HPA is used for this particular Deployment/ReplicaSet before applying the CHPA
 - Check how to deal with CHPA version change v1beta1 -> v1beta2
 - (probably) log
