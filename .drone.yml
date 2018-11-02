@@ -37,12 +37,10 @@ pipeline:
     release: configurable-hpa-${DRONE_BUILD_NUMBER}
     chart: deployment/helm/configurable-hpa
     values: deployment/environments/ci/values.yaml
-    set: image.tag=v1beta1-${CI_PARENT_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
+    set: image.tag=v1beta1-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
     wait: true
     when:
-      event: [deployment]
-      environment: [ci]
-
+      event: [push]
 
   deploy-stage:
     image: quay.io/postmates/helm-deploy
