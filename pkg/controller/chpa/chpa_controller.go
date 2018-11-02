@@ -131,6 +131,8 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 	log.Printf("Reconcile request: %v\n", request)
 
 	// resRepeat will be returned if we want to re-run reconcile process
+	// NB: we can't return non-nil err, as the "reconcile" msg will be added to the rate-limited queue
+	// so that it'll slow down if we have several problems in a row
 	resRepeat := reconcile.Result{RequeueAfter: r.syncPeriod}
 	// resStop will be returned in case if we found some problem that can't be fixed, and we want to stop repeating reconcile process
 	resStop := reconcile.Result{}
@@ -143,16 +145,17 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 			return resStop, nil
 		}
 		// Error reading the object (intermittent problems?) - requeue the request,
-		return resRepeat, err
+		log.Printf("Can't get CHPA object '%v': %v", request.NamespacedName, err)
+		return resRepeat, nil
 	}
 
 	setCHPADefaults(chpa)
 	log.Printf("-> chpa: %v\n", chpa.String())
 
 	if err := r.checkCHPAValidity(chpa); err != nil {
-		log.Printf("-> invalid spec: %v\n", err)
-		// the chpa spec might change, we shouldn't stop repeating reconcile process
-		return resRepeat, err
+		log.Printf("Got an invalid CHPA spec '%v': %v", request.NamespacedName, err)
+		// the chpa spec still persists, so we should go on processing it
+		return resRepeat, nil
 	}
 
 	// kind := chpa.Spec.ScaleTargetRef.Kind
@@ -161,13 +164,15 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 	namespacedName := types.NamespacedName{Namespace: namespace, Name: name}
 
 	deploy := &appsv1.Deployment{}
-	if r.Get(context.TODO(), namespacedName, deploy) != nil {
+	if err := r.Get(context.TODO(), namespacedName, deploy); err != nil {
 		// Error reading the object, repeat later
-		return resRepeat, err
+		log.Printf("Error reading Deployment '%v': %v", namespacedName, err)
+		return resRepeat, nil
 	}
 	if err := controllerutil.SetControllerReference(chpa, deploy, r.scheme); err != nil {
 		// Error communicating with apiserver, repeat later
-		return resRepeat, err
+		log.Printf("Can't set the controller reference for the deployment %v: %v", namespacedName, err)
+		return resRepeat, nil
 	}
 
 	return r.ReconcileCHPA(chpa, deploy)
@@ -175,6 +180,8 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 
 func (r *ReconcileCHPA) ReconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (reconcile.Result, error) {
 	// resRepeat will be returned if we want to re-run reconcile process
+	// NB: we can't return non-nil err, as the "reconcile" msg will be added to the rate-limited queue
+	// so that it'll slow down if we have several problems in a row
 	resRepeat := reconcile.Result{RequeueAfter: r.syncPeriod}
 	currentReplicas := deploy.Status.Replicas
 	log.Printf("-> deploy for an chpa: {%v/%v replicas:%v}\n", deploy.Namespace, deploy.Name, currentReplicas)
@@ -209,8 +216,9 @@ func (r *ReconcileCHPA) ReconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 			cpuDesiredReplicas, cpuCurrentUtilization, cpuTimestamp, err = r.computeReplicasForCPUUtilization(chpa, deploy)
 			if err != nil {
 				reference := fmt.Sprintf("%s/%s/%s", chpa.Spec.ScaleTargetRef.Kind, chpa.Namespace, chpa.Spec.ScaleTargetRef.Name)
-				err := fmt.Errorf("failed to compute desired number of replicas based on CPU utilization for %s: %v", reference, err)
-				return resRepeat, err
+				err := fmt.Errorf("Failed to compute desired number of replicas based on CPU utilization for %s: %v", reference, err)
+				log.Printf("%v", err)
+				return resRepeat, nil
 			}
 		}
 
@@ -259,7 +267,10 @@ func (r *ReconcileCHPA) ReconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 	}
 
 	err = r.updateStatus(chpa, currentReplicas, desiredReplicas, cpuCurrentUtilization, rescale)
-	return resRepeat, err
+	if err != nil {
+		log.Printf("Failed to update CHPA status of '%s/%s': %v", chpa.Namespace, chpa.Name, err)
+	}
+	return resRepeat, nil
 }
 
 func setCHPADefaults(chpa *chpav1beta1.CHPA) {
