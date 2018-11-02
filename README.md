@@ -149,6 +149,8 @@ Here's a list of things that must be done next:
 - (done) Check RBAC rules
 - (done) Check how several chpa objects works together
 - (done) Check OWNERship (solution: add `--cascade=false` parameter)
+- Fix exponential backoff for reconcile queue
+- "FailedGetMetrics: unable to get metrics for resource cpu: no metrics returned from resource metrics API"
 - Add unittests to the CI pipeline
 - Add e2e tests
 - Add "events" system to the chpa (as in hpa) to show problems/events with each particular deployment scaling process

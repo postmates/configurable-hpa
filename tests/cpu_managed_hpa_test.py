@@ -19,13 +19,18 @@ def tearDownModule(): # pylint: disable=invalid-name
     out, err = test_helper.stop_manager(MANAGER_PIPE)
     sys.stdout.write("stdout: " + out.decode("utf-8"))
     sys.stdout.write("stderr: " + err.decode("utf-8"))
+    cmd = ["kubectl", "delete",
+           "service,deploy,chpas.autoscalers.postmates.com",
+           "-l", "app=chpa-test"]
+    test_helper.check_output(cmd)
 
 class HPATestCase(unittest.TestCase):
     """ Class for all HPA autoscaling tests """
     DEPLOY_NAME_PREFIX = "chpa-test"
     DEPLOY_LABEL_KEY = "app"
     DEPLOY_LABEL_VALUE = "chpa-test"
-    DEFAULT_TEST_TIMEOUT = 10 # seconds to wait for the test to pass
+    DEFAULT_TEST_TIMEOUT = 10 # seconds to run usual tests
+    LONG_TEST_TIMEOUT = 120 # seconds to run long tests
 
     @classmethod
     def setUpClass(cls):
@@ -44,6 +49,31 @@ class HPATestCase(unittest.TestCase):
         name = "{}-{}".format(self.DEPLOY_NAME_PREFIX, self.__class__.__name__).lower()
         return name
 
+    def add_cpu_load(self, sleep):
+        """ Add load to our chpa-managed deployment"""
+        service_name = "{}-{}".format(self.DEPLOY_NAME_PREFIX, self.__class__.__name__).lower()
+        name = "{}-load".format(service_name)
+        command_str = "while true; do echo 'next'; wget -q -O- {}; sleep {}; done;"
+        command = command_str.format(service_name, sleep)
+        labels = "--labels={}={}".format(self.DEPLOY_LABEL_KEY, self.DEPLOY_LABEL_VALUE)
+        cmd = ["kubectl", "run", name, "--image=busybox", labels, "--", "/bin/sh", "-c", command]
+        test_helper.check_output(cmd)
+
+    def remove_cpu_load(self):
+        """ Remove deployment that adds load to our chpa-managed deployment"""
+        name = "{}-{}-load".format(self.DEPLOY_NAME_PREFIX, self.__class__.__name__).lower()
+        cmd = ["kubectl", "delete", "deploy", name]
+        test_helper.check_output(cmd)
+
+def check_replicas(name, num):
+    """ return function that compares number of replicas to some number"""
+    def fun():
+        deploy = test_helper.get_deploy(name)
+        print("deploy replicas: {}".format(deploy["status"]["replicas"]))
+        return deploy["status"]["replicas"] == num
+    return fun
+
+
 class TestMinReplicasAutoIncrease(HPATestCase):
     """ Class for all CPU-based autoscaling tests """
 
@@ -53,11 +83,26 @@ class TestMinReplicasAutoIncrease(HPATestCase):
         chpa_obj = chpa.CHPA(name, 3, name, {"minReplicas": 2})
         file_path = chpa_obj.save_to_tmp_file()
         test_helper.check_output(["kubectl", "apply", "-f", file_path])
-        def check_replicas():
-            deploy = test_helper.get_deploy(name)
-            print("deploy status: {}".format(deploy["status"]))
-            return deploy["status"]["replicas"] == 2
-        res = test_helper.run_until(self.DEFAULT_TEST_TIMEOUT, check_replicas)
+
+        res = test_helper.run_until(self.DEFAULT_TEST_TIMEOUT, check_replicas(name, 2))
+        self.assertTrue(res)
+
+class TestRaiseToMax(HPATestCase):
+    """ Class for all CPU-based autoscaling tests """
+
+    def test_me(self):
+        """ test something """
+        name = self.resource_name()
+        chpa_obj = chpa.CHPA(name, 10, name)
+        file_path = chpa_obj.save_to_tmp_file()
+        test_helper.check_output(["kubectl", "apply", "-f", file_path])
+
+        self.add_cpu_load(1)
+        res = test_helper.run_until(self.LONG_TEST_TIMEOUT, check_replicas(name, 8))
+        self.assertTrue(res)
+
+        self.remove_cpu_load()
+        res = test_helper.run_until(self.LONG_TEST_TIMEOUT, check_replicas(name, 1))
         self.assertTrue(res)
 
 # use parallel approach

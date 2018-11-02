@@ -26,14 +26,12 @@ def setup_cluster(name, label_key, label_value):
     """ Setup a cluster """
     cmd = ["kubectl", "run", name, "--image=k8s.gcr.io/hpa-example",
            "--requests=cpu=10m", "--expose", "--port=80",
-           "--labels={}={}".format(label_key, label_value)]
+           "--labels={}={},test={}".format(label_key, label_value, name)]
     check_output(cmd)
 
 def teardown_cluster(name, _label_key, _label_value):
     """ Tear down the cluster """
-    cmd = ["kubectl", "delete", "deploy", name]
-    check_output(cmd)
-    cmd = ["kubectl", "delete", "service", name]
+    cmd = ["kubectl", "delete", "deploy,service", name]
     check_output(cmd)
 
 def check_output(cmd):
