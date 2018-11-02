@@ -33,7 +33,7 @@ pipeline:
         target: ci_kubernetes_token
     server: https://k8s-api.admin.us-east-2.postmates.com
     verbose: true
-    namespace: team-infra
+    namespace: ci
     release: configurable-hpa-${DRONE_BUILD_NUMBER}
     chart: deployment/helm/configurable-hpa
     values: deployment/environments/ci/values.yaml
