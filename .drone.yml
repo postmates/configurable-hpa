@@ -56,7 +56,7 @@ pipeline:
     update_deps: true
     # Note: we use parent build number in the image tag below to reference the docker image
     # which was built by the promoted build.
-    set: image.tag=v1beta1-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
+    set: image.tag=v1beta1-${DRONE_PARENT_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
     wait: true
     when:
       event: [deployment]
@@ -76,7 +76,7 @@ pipeline:
     update_deps: true
     # Note: we use parent build number in the image tag below to reference the docker image
     # which was built by the promoted build.
-    set: image.tag=v1beta1-${CI_PARENT_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
+    set: image.tag=v1beta1-${DRONE_PARENT_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
     wait: true
     when:
       event: [deployment]
