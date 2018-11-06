@@ -31,7 +31,7 @@ def setup_cluster(name, label_key, label_value):
 
 def teardown_cluster(name, _label_key, _label_value):
     """ Tear down the cluster """
-    cmd = ["kubectl", "delete", "deploy,service", name]
+    cmd = ["kubectl", "delete", "deploy,service,chpas.autoscalers.postmates.com", name]
     check_output(cmd)
 
 def check_output(cmd):

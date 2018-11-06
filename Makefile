@@ -55,5 +55,5 @@ docker-build-test:
 docker-push-test:
 	docker push quay.io/postmates/configurable-hpa:test-v1
 
-e2e: manager
-	(cd tests; python -m unittest *.py)
+e2e:
+	cd tests; python -m unittest *.py

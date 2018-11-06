@@ -30,11 +30,12 @@ class HPATestCase(unittest.TestCase):
     DEPLOY_LABEL_KEY = "app"
     DEPLOY_LABEL_VALUE = "chpa-test"
     DEFAULT_TEST_TIMEOUT = 10 # seconds to run usual tests
-    LONG_TEST_TIMEOUT = 120 # seconds to run long tests
+    LONG_TEST_TIMEOUT = 300 # seconds to run long tests
 
     @classmethod
     def setUpClass(cls):
         print("")
+        print("Run Test " + cls.__name__)
         name = "{}-{}".format(cls.DEPLOY_NAME_PREFIX, cls.__name__).lower()
         test_helper.setup_cluster(name, cls.DEPLOY_LABEL_KEY, cls.DEPLOY_LABEL_VALUE)
 
@@ -93,7 +94,7 @@ class TestRaiseToMax(HPATestCase):
     def test_me(self):
         """ test something """
         name = self.resource_name()
-        chpa_obj = chpa.CHPA(name, 10, name)
+        chpa_obj = chpa.CHPA(name, 8, name)
         file_path = chpa_obj.save_to_tmp_file()
         test_helper.check_output(["kubectl", "apply", "-f", file_path])
 
