@@ -149,6 +149,9 @@ Here's a list of things that must be done next:
 - (done) Check RBAC rules
 - (done) Check how several chpa objects works together
 - (done) Check OWNERship (solution: add `--cascade=false` parameter)
+- ScaleUpLimitPods + ScaleUpLimitPercentages
+- tests for scaleuplimit*
+- tests for incorrect chpa
 - Fix exponential backoff for reconcile queue
 - "FailedGetMetrics: unable to get metrics for resource cpu: no metrics returned from resource metrics API"
 - Add unittests to the CI pipeline
