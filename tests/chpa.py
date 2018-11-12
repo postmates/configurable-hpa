@@ -6,12 +6,9 @@ import tempfile
 
 class CHPA:
     """ Class to represent CHPA, store/load from/to file """
-    allowed_options = ["refKind",
-                       "downscaleForbiddenWindowSeconds", "upscaleForbiddenWindowSeconds",
-                       "tolerance", "minReplicas", "targetCPUUtilizationPercentage"]
     default_options = {
         "labelKey": "app",
-        "labelValue": "hpa-test",
+        "labelValue": "chpa-test",
         "apiVersion": "autoscalers.postmates.com/v1beta1",
         "kind": "CHPA",
         "refKind": "Deployment",
@@ -19,6 +16,8 @@ class CHPA:
         "upscaleForbiddenWindowSeconds": 10,    # to fasten the test we should set timeout < 15sec
         "tolerance": 0.1,
         "minReplicas": 1,
+        "scaleUpLimitFactor": 2.0,
+        "scaleUpLimitMinimum": 4,
         "targetCPUUtilizationPercentage": 80}
 
     format_str = """{{
@@ -38,20 +37,25 @@ class CHPA:
         }},
         "minReplicas": {minReplicas},
         "maxReplicas": {maxReplicas},
+        "scaleUpLimitFactor": {scaleUpLimitFactor},
+        "scaleUpLimitMinimum": {scaleUpLimitMinimum},
         "targetCPUUtilizationPercentage": {targetCPUUtilizationPercentage}
     }}
 }}"""
 
     def __init__(self, name, maxReplicas, refName, options=None):
         """ Create a new CHPA instance"""
+        self.path = None
         if options is None:
             options = {}
         self.options = copy.copy(self.default_options)
-        self.options.update({k: v for k, v in options.items() if k in self.allowed_options})
+        incorrect = {k: v for k, v in options.items() if not k in self.default_options.keys()}
+        if incorrect:
+            raise ValueError("Incorrect chpa-parameters: {}".format(incorrect))
+        self.options.update({k: v for k, v in options.items() if k in self.default_options.keys()})
         self.options.update({"name": name,
                              "maxReplicas": maxReplicas,
                              "refName": refName})
-        self.path = None
 
     def __repr__(self):
         return self.format_str.format(**self.options)

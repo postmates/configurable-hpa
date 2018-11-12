@@ -1,5 +1,6 @@
 """ Module to run all CPU-based autoscaling tests """
 
+import datetime
 import sys
 import unittest
 import chpa
@@ -30,7 +31,7 @@ class HPATestCase(unittest.TestCase):
     DEPLOY_LABEL_KEY = "app"
     DEPLOY_LABEL_VALUE = "chpa-test"
     DEFAULT_TEST_TIMEOUT = 10 # seconds to run usual tests
-    LONG_TEST_TIMEOUT = 180 # seconds to run long tests
+    LONG_TEST_TIMEOUT = 300 # seconds to run long tests
 
     @classmethod
     def setUpClass(cls):
@@ -81,7 +82,7 @@ class TestMinReplicasAutoIncrease(HPATestCase):
     def test_me(self):
         """ test something """
         name = self.resource_name()
-        chpa_obj = chpa.CHPA(name, 3, name, {"minReplicas": 2})
+        chpa_obj = chpa.CHPA(name, 3, name, {"minReplicas": 2},)
         test_helper.check_output(["kubectl", "apply", "-f", chpa_obj.save_to_tmp_file()])
 
         res = test_helper.run_until(self.DEFAULT_TEST_TIMEOUT, check_replicas(name, 2))
@@ -93,7 +94,7 @@ class TestRaiseToMax(HPATestCase):
     def test_me(self):
         """ test something """
         name = self.resource_name()
-        chpa_obj = chpa.CHPA(name, 8, name)
+        chpa_obj = chpa.CHPA(name, 8, name, {"targetCPUUtilizationPercentage": 10})
         test_helper.check_output(["kubectl", "apply", "-f", chpa_obj.save_to_tmp_file()])
 
         self.add_cpu_load(0.5)
@@ -109,22 +110,19 @@ class TestRaiseToMax(HPATestCase):
         res = test_helper.run_until(self.LONG_TEST_TIMEOUT, check_replicas(name, 1))
         self.assertTrue(res)
 
-class TestRaiseToMaxSlowly(HPATestCase):
+class TestRaiseToMaxFast(HPATestCase):
     """ Class for all CPU-based autoscaling tests """
 
     def test_me(self):
         """ test something """
         name = self.resource_name()
-        chpa_obj = chpa.CHPA(name, 8, name)
+        chpa_obj = chpa.CHPA(name, 8, name, {"scaleUpLimitFactor": 10.0,
+                                             "targetCPUUtilizationPercentage": 10})
         test_helper.check_output(["kubectl", "apply", "-f", chpa_obj.save_to_tmp_file()])
 
         self.add_cpu_load(0.5)
-        # first scale up will be 1 -> 4
-        res = test_helper.run_until(self.LONG_TEST_TIMEOUT, check_replicas(name, 4))
-        self.assertTrue(res)
-        # next will be 4 -> 8
-        res = test_helper.run_until(self.LONG_TEST_TIMEOUT, check_replicas(name, 8))
-        self.assertTrue(res)
+        # scaling will be very fast: 1 -> 8
+        self.assertTrue(test_helper.run_until(self.LONG_TEST_TIMEOUT, check_replicas(name, 8)))
 
         self.remove_cpu_load()
         # then it will go down instantly 8 -> 1
