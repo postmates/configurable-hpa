@@ -262,7 +262,6 @@ func (r *ReconcileCHPA) ReconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 		log.Printf("Successfull rescale of %s, old size: %d, new size: %d, reason: %s",
 			chpa.Name, currentReplicas, desiredReplicas, rescaleReason)
 	} else {
-		log.Printf("Will not scale")
 		desiredReplicas = currentReplicas
 	}
 
@@ -309,6 +308,7 @@ func calculateScaleUpLimit(chpa *chpav1beta1.CHPA, currentReplicas int32) int32 
 
 func shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32, timestamp time.Time) bool {
 	if desiredReplicas == currentReplicas {
+		log.Printf("Will not scale: number of replicas is not changed")
 		return false
 	}
 
@@ -316,18 +316,26 @@ func shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32,
 		return true
 	}
 
-	// Going down only if the usageRatio dropped significantly below the target
+	// Scale down only if the usageRatio dropped significantly below the target
 	// and there was no rescaling in the last downscaleForbiddenWindow.
 	downscaleForbiddenWindow := time.Duration(chpa.Spec.DownscaleForbiddenWindowSeconds) * time.Second
-	if desiredReplicas < currentReplicas && chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow).Before(timestamp) {
-		return true
+	if desiredReplicas < currentReplicas {
+		if chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow).Before(timestamp) {
+			return true
+		} else {
+			log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow))
+		}
 	}
 
-	// Going up only if the usage ratio increased significantly above the target
+	// Scale up only if the usage ratio increased significantly above the target
 	// and there was no rescaling in the last upscaleForbiddenWindow.
 	upscaleForbiddenWindow := time.Duration(chpa.Spec.UpscaleForbiddenWindowSeconds) * time.Second
-	if desiredReplicas > currentReplicas && chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow).Before(timestamp) {
-		return true
+	if desiredReplicas > currentReplicas {
+		if chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow).Before(timestamp) {
+			return true
+		} else {
+			log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow))
+		}
 	}
 	return false
 }
