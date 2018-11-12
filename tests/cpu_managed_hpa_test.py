@@ -1,6 +1,5 @@
 """ Module to run all CPU-based autoscaling tests """
 
-import datetime
 import sys
 import unittest
 import chpa
@@ -31,7 +30,7 @@ class HPATestCase(unittest.TestCase):
     DEPLOY_LABEL_KEY = "app"
     DEPLOY_LABEL_VALUE = "chpa-test"
     DEFAULT_TEST_TIMEOUT = 10 # seconds to run usual tests
-    LONG_TEST_TIMEOUT = 300 # seconds to run long tests
+    LONG_TEST_TIMEOUT = 600 # seconds to run long tests
 
     @classmethod
     def setUpClass(cls):
@@ -127,18 +126,6 @@ class TestRaiseToMaxFast(HPATestCase):
         self.remove_cpu_load()
         # then it will go down instantly 8 -> 1
         res = test_helper.run_until(self.LONG_TEST_TIMEOUT, check_replicas(name, 1))
-        self.assertTrue(res)
-
-class TestIncorrectCHPAs(HPATestCase):
-    """ Class for all CPU-based autoscaling tests """
-
-    def test_me(self):
-        """ test something """
-        name = self.resource_name()
-        chpa_obj = chpa.CHPA(name, 3, name, {"minReplicas": 2})
-        test_helper.check_output(["kubectl", "apply", "-f", chpa_obj.save_to_tmp_file()])
-
-        res = test_helper.run_until(self.DEFAULT_TEST_TIMEOUT, check_replicas(name, 2))
         self.assertTrue(res)
 
 # use parallel approach

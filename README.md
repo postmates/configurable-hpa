@@ -125,15 +125,20 @@ kubectl delete deploy/my-load-generator deploy/chpa-example
 
 To make tests work you need to have [kubebuilder](https://book.kubebuilder.io/) installed
 
-To install CHPA to k8s for now manual helm is used (to be added to the CI pipeline later)
+For now the [DroneCI pipeline](https://ci.admin.us-east-2.postmates.com/postmates/configurable-hpa)
+is used only to run unit tests and to install CHPA controller to the `admin` cluster.
 
-Install to the `admin` cluster:
+To install CHPA to other clusters we use Slack (`#team-infra` channel) and `@deploybot`
 
-    helm --kube-context admin.us-east-2.aws.k8s --tiller-namespace kube-system upgrade configurable-hpa deployment/helm/configurable-hpa --install --namespace kube-system --wait=true --values deployment/environments/ci/values.yaml --set=image.tag=v1beta1-9-3cf57c22 --debug
+Install to the `stage` cluster, send the following message in the `#team-infra` channel:
 
-Install to the `stage` cluster:
+    @Deploybot configurable-hpa 34 stage
 
-    helm --kube-context stage.us-west-2.aws.k8s --tiller-namespace kube-system upgrade configurable-hpa deployment/helm/configurable-hpa --install --namespace kube-system --wait=true --values deployment/environments/stage/values.yaml --set=image.tag=v1beta1-9-3cf57c22 --debug
+where `34` is a build for master that have all the tests pass.
+
+Install to the `prod` cluster:
+
+    @Deploybot configurable-hpa 34 prod
 
 To get chpa-controller logs:
 
