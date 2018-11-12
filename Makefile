@@ -1,5 +1,6 @@
 # Image URL to use all building/pushing image targets
-IMG ?= quay.io/postmates/configurable-hpa:000
+IMG ?= quay.io/postmates/configurable-hpa
+BUILD_TAG ?= test-v2
 
 all: test manager
 
@@ -40,20 +41,18 @@ vet:
 generate:
 	go generate ./pkg/... ./cmd/...
 
-# Build the docker image
+# Build the docker image, should be done only for test
+# For production, the image is built in the DroneCI
+#   (check .drone.yml)
 docker-build: test
-	docker build . -t ${IMG}
-
-# Push the docker image
-docker-push:
-	docker push ${IMG}
+	docker build . -t ${IMG}:stable
 
 # Build the docker image for test
-docker-build-test:
-	docker build . --squash -f Dockerfile.test -t quay.io/postmates/configurable-hpa:test-v1
+docker-build-test-image:
+	docker build . --squash -f Dockerfile.test -t ${IMG}:${BUILD_TAG}
 
-docker-push-test:
-	docker push quay.io/postmates/configurable-hpa:test-v1
+docker-push-test-image:
+	docker push ${IMG}:${BUILD_TAG}
 
 e2e:
 	cd tests; python -m unittest *.py

@@ -4,13 +4,6 @@ workspace:
   path: src/github.com/postmates/configurable-hpa
 
 pipeline:
-  #test-sources:
-  #  image: quay.io/postmates/configurable-hpa:test-v1
-  #  commands:
-  #    - make test
-  #  when:
-  #    event: [push]
-
   build-image:
     image: plugins/docker
     registry: quay.io
@@ -24,6 +17,14 @@ pipeline:
         target: docker_password
     when:
       event: [push]
+
+  test-sources:
+    image: quay.io/postmates/configurable-hpa:test-v2
+    commands:
+      - make test
+    when:
+      event: [push]
+
 
   deploy-ci:
     image: quay.io/postmates/helm-deploy
@@ -41,6 +42,7 @@ pipeline:
     wait: true
     when:
       event: [push]
+
 
   deploy-stage:
     image: quay.io/postmates/helm-deploy
