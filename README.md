@@ -133,7 +133,7 @@ To run tests you need to have [kubebuilder](https://book.kubebuilder.io/) instal
 
 To run e2e test you need to have a kubectl in your `$PATH` and have 
 kubectl context configured. 
-The test will create several clusters, prepare some load for them and check that the cluster is scaled
+The test will create several Deployments and Services, prepare some load for them and check that the Deployment is scaled
 
     make e2e
 
