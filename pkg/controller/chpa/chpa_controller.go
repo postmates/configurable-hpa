@@ -26,8 +26,7 @@ import (
 	"math"
 	"time"
 
-	"k8s.io/client-go/kubernetes"
-
+	"github.com/golang/glog"
 	chpav1beta1 "github.com/postmates/configurable-hpa/pkg/apis/autoscalers/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
@@ -35,6 +34,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/controller/podautoscaler/metrics"
 	resourceclient "k8s.io/metrics/pkg/client/clientset_generated/clientset/typed/metrics/v1beta1"
 	"k8s.io/metrics/pkg/client/custom_metrics"
@@ -77,13 +80,20 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 		log.Fatal(err)
 	}
 
+	evtNamespacer := clientSet.CoreV1()
+	broadcaster := record.NewBroadcaster()
+	broadcaster.StartLogging(glog.Infof)
+	broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: evtNamespacer.Events("")})
+	recorder := broadcaster.NewRecorder(scheme.Scheme, apiv1.EventSource{Component: "horizontal-pod-autoscaler"})
+
 	replicaCalc := NewReplicaCalculator(metricsClient, clientSet.CoreV1(), defaultTolerance)
 	return &ReconcileCHPA{
-		Client:      mgr.GetClient(),
-		scheme:      mgr.GetScheme(),
-		clientSet:   clientSet,
-		replicaCalc: replicaCalc,
-		syncPeriod:  defaultSyncPeriod,
+		Client:        mgr.GetClient(),
+		scheme:        mgr.GetScheme(),
+		clientSet:     clientSet,
+		replicaCalc:   replicaCalc,
+		eventRecorder: recorder,
+		syncPeriod:    defaultSyncPeriod,
 	}
 }
 
@@ -110,10 +120,11 @@ var _ reconcile.Reconciler = &ReconcileCHPA{}
 type ReconcileCHPA struct {
 	client.Client
 	//replicaCalculator *podautoscaler.ReplicaCalculator
-	scheme      *runtime.Scheme
-	clientSet   kubernetes.Interface
-	syncPeriod  time.Duration
-	replicaCalc *ReplicaCalculator
+	scheme        *runtime.Scheme
+	clientSet     kubernetes.Interface
+	syncPeriod    time.Duration
+	eventRecorder record.EventRecorder
+	replicaCalc   *ReplicaCalculator
 }
 
 // Reconcile reads that state of the cluster for a CHPA object and makes changes based on the state read
@@ -259,14 +270,17 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 	if rescale {
 		deploy.Spec.Replicas = &desiredReplicas
 		r.Update(context.TODO(), deploy)
-		log.Printf("Successfull rescale of %s, old size: %d, new size: %d, reason: %s",
+		msg := fmt.Sprintf("Successfull rescale of %s, old size: %d, new size: %d, reason: %s",
 			chpa.Name, currentReplicas, desiredReplicas, rescaleReason)
+		r.eventRecorder.Event(chpa, apiv1.EventTypeNormal, "SuccessfulRescale", msg)
+		log.Printf(msg)
 	} else {
 		desiredReplicas = currentReplicas
 	}
 
 	err = r.updateStatus(chpa, currentReplicas, desiredReplicas, cpuCurrentUtilization, rescale)
 	if err != nil {
+		r.eventRecorder.Event(chpa, apiv1.EventTypeWarning, "FailedUpdateStatus", err.Error())
 		log.Printf("Failed to update CHPA status of '%s/%s': %v", chpa.Namespace, chpa.Name, err)
 	}
 	return resRepeat, nil
@@ -345,14 +359,14 @@ func (r *ReconcileCHPA) computeReplicasForCPUUtilization(chpa *chpav1beta1.CHPA,
 	if deploy.Spec.Selector == nil {
 		errMsg := "selector is required"
 		log.Printf("%s\n", errMsg)
-		// a.eventRecorder.Event(chpa, api.EventTypeWarning, "SelectorRequired", errMsg)
+		r.eventRecorder.Event(chpa, apiv1.EventTypeWarning, "SelectorRequired", errMsg)
 		return 0, nil, time.Time{}, fmt.Errorf(errMsg)
 	}
 	selector, err := metav1.LabelSelectorAsSelector(deploy.Spec.Selector)
 	if err != nil {
 		errMsg := fmt.Sprintf("couldn't convert selector string to a corresponding selector object: %v", err)
 		log.Printf("%s\n", errMsg)
-		//a.eventRecorder.Event(chpa, api.EventTypeWarning, "InvalidSelector", errMsg)
+		r.eventRecorder.Event(chpa, apiv1.EventTypeWarning, "InvalidSelector", errMsg)
 		return 0, nil, time.Time{}, fmt.Errorf(errMsg)
 	}
 
@@ -362,20 +376,21 @@ func (r *ReconcileCHPA) computeReplicasForCPUUtilization(chpa *chpav1beta1.CHPA,
 		upscaleForbiddenWindow := time.Duration(chpa.Spec.UpscaleForbiddenWindowSeconds) * time.Second
 		if time.Now().After(lastScaleTime.Add(upscaleForbiddenWindow)) {
 			log.Printf("FailedGetMetrics: %v\n", err)
-			//a.eventRecorder.Event(chpa, api.EventTypeWarning, "FailedGetMetrics", err.Error())
+			r.eventRecorder.Event(chpa, apiv1.EventTypeWarning, "FailedGetMetrics", err.Error())
 		} else {
 			log.Printf("MetricsNotAvailableYet: %v\n", err)
-			//a.eventRecorder.Event(chpa, api.EventTypeNormal, "MetricsNotAvailableYet", err.Error())
+			r.eventRecorder.Event(chpa, apiv1.EventTypeNormal, "MetricsNotAvailableYet", err.Error())
 		}
 
 		return 0, nil, time.Time{}, fmt.Errorf("failed to get CPU utilization: %v", err)
 	}
 
 	if desiredReplicas != currentReplicas {
-		//a.eventRecorder.Eventf(chpa, api.EventTypeNormal, "DesiredReplicasComputed",
-		//	"Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
-		log.Printf("-> Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
+		msg := fmt.Sprintf("Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
 			desiredReplicas, utilization, deploy.Status.Replicas)
+		r.eventRecorder.Event(chpa, apiv1.EventTypeNormal, "DesiredReplicasComputed", msg)
+		//	"Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
+		log.Printf("-> %s", msg)
 	}
 
 	return desiredReplicas, &utilization, timestamp, nil
