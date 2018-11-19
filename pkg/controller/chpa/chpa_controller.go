@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-* The module is a combined version of
- */
+// Package chpa and this controller were mostly inspired by
+//	k8s-1.10.8/pkg/controller/podautoscaler/horizontal.go
+//
 package chpa
 
 import (
@@ -175,10 +175,10 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 		return resRepeat, nil
 	}
 
-	return r.ReconcileCHPA(chpa, deploy)
+	return r.reconcileCHPA(chpa, deploy)
 }
 
-func (r *ReconcileCHPA) ReconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (reconcile.Result, error) {
+func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (reconcile.Result, error) {
 	// resRepeat will be returned if we want to re-run reconcile process
 	// NB: we can't return non-nil err, as the "reconcile" msg will be added to the rate-limited queue
 	// so that it'll slow down if we have several problems in a row
@@ -322,9 +322,8 @@ func shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32,
 	if desiredReplicas < currentReplicas {
 		if chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow).Before(timestamp) {
 			return true
-		} else {
-			log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow))
 		}
+		log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow))
 	}
 
 	// Scale up only if the usage ratio increased significantly above the target
@@ -333,9 +332,8 @@ func shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32,
 	if desiredReplicas > currentReplicas {
 		if chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow).Before(timestamp) {
 			return true
-		} else {
-			log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow))
 		}
+		log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow))
 	}
 	return false
 }
