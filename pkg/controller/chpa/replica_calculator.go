@@ -99,6 +99,7 @@ func (c *ReplicaCalculator) GetResourceReplicas(currentReplicas int32, targetUti
 			if pod.Status.Phase != v1.PodFailed {
 				// Failed pods should not be counted as unready pods as they will
 				// not become running anymore.
+				log.Printf("-> unready pod %s\n", pod.Name)
 				unreadyPods.Insert(pod.Name)
 			}
 			delete(metrics, pod.Name)
