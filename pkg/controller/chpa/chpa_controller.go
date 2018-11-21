@@ -323,6 +323,28 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 		}
 	}
 
+	if rescale {
+		deploy.Spec.Replicas = &desiredReplicas
+		if err := r.Update(context.TODO(), deploy); err != nil {
+			r.eventRecorder.Eventf(chpa, v1.EventTypeWarning, "FailedRescale", "New size: %d; reason: %s; error: %v", desiredReplicas, rescaleReason, err.Error())
+			setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedUpdateScale", "the HPA controller was unable to update the target scale: %v", err)
+			r.setCurrentReplicasInStatus(chpa, currentReplicas)
+			if err := r.updateStatusIfNeeded(chpaStatusOriginal, chpa); err != nil {
+				r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedUpdateReplicas", err.Error())
+				setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedUpdateReplicas", "the CHPA controller was unable to update the number of replicas: %v", err)
+				return resRepeat, nil
+			}
+			return resRepeat, nil
+		}
+		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionTrue, "SucceededRescale", "the HPA controller was able to update the target scale to %d", desiredReplicas)
+		r.eventRecorder.Eventf(chpa, v1.EventTypeNormal, "SuccessfulRescale", "New size: %d; reason: %s", desiredReplicas, rescaleReason)
+		glog.Infof("Successful rescale of %s, old size: %d, new size: %d, reason: %s",
+			chpa.Name, currentReplicas, desiredReplicas, rescaleReason)
+	} else {
+		glog.V(4).Infof("decided not to scale %s to %v (last scale time was %s)", reference, desiredReplicas, chpa.Status.LastScaleTime)
+		desiredReplicas = currentReplicas
+	}
+
 	return resRepeat, nil
 }
 
