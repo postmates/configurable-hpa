@@ -345,6 +345,9 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 		desiredReplicas = currentReplicas
 	}
 
+	r.setStatus(chpa, currentReplicas, desiredReplicas, metricStatuses, rescale)
+	r.updateStatusIfNeeded(chpaStatusOriginal, chpa)
+
 	return resRepeat, nil
 }
 
