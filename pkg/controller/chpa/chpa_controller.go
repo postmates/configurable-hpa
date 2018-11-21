@@ -295,6 +295,32 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 			rescaleReason = "All metrics below target"
 		}
 		desiredReplicas = r.normalizeDesiredReplicas(chpa, currentReplicas, desiredReplicas)
+
+		rescale = r.shouldScale(chpa, currentReplicas, desiredReplicas, timestamp)
+		backoffDown := false
+		backoffUp := false
+		if chpa.Status.LastScaleTime != nil {
+			downscaleForbiddenWindow := time.Duration(chpa.Spec.DownscaleForbiddenWindowSeconds) * time.Second
+			if !chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow).Before(timestamp) {
+				setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "BackoffDownscale", "the time since the previous scale is still within the downscale forbidden window")
+				backoffDown = true
+			}
+
+			upscaleForbiddenWindow := time.Duration(chpa.Spec.UpscaleForbiddenWindowSeconds) * time.Second
+			if !chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow).Before(timestamp) {
+				backoffUp = true
+				if backoffDown {
+					setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "BackoffBoth", "the time since the previous scale is still within both the downscale and upscale forbidden windows")
+				} else {
+					setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "BackoffUpscale", "the time since the previous scale is still within the upscale forbidden window")
+				}
+			}
+		}
+
+		if !backoffDown && !backoffUp {
+			// mark that we're not backing off
+			setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionTrue, "ReadyForNewScale", "the last scale time was sufficiently old as to warrant a new scale")
+		}
 	}
 
 	return resRepeat, nil
@@ -555,7 +581,7 @@ func calculateScaleUpLimit(chpa *chpav1beta1.CHPA, currentReplicas int32) int32 
 	return int32(math.Max(chpa.Spec.ScaleUpLimitFactor*float64(currentReplicas), float64(chpa.Spec.ScaleUpLimitMinimum)))
 }
 
-func shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32, timestamp time.Time) bool {
+func (r *ReconcileCHPA) shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32, timestamp time.Time) bool {
 	if desiredReplicas == currentReplicas {
 		log.Printf("Will not scale: number of replicas is not changed")
 		return false
