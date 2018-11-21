@@ -44,12 +44,15 @@ const (
 	defaultTestingTolerance = 0.1
 )
 
+// ReplicaCalculator is responsible for calculation of the number of replicas
+// It contains all the needed information
 type ReplicaCalculator struct {
 	metricsClient metricsclient.MetricsClient
 	podsGetter    v1coreclient.PodsGetter
 	tolerance     float64
 }
 
+// NewReplicaCalculator returns a ReplicaCalculator object reference
 func NewReplicaCalculator(metricsClient metricsclient.MetricsClient, podsGetter v1coreclient.PodsGetter, tolerance float64) *ReplicaCalculator {
 	return &ReplicaCalculator{
 		metricsClient: metricsClient,
