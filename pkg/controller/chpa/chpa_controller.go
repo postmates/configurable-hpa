@@ -782,6 +782,11 @@ func (r *ReconcileCHPA) computeReplicasForMetrics(chpa *chpav1beta1.CHPA, deploy
 				setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "FailedGetExternalMetric", "the HPA was unable to compute the replica count: %v", err)
 				return 0, "", nil, time.Time{}, fmt.Errorf(errMsg)
 			}
+		default:
+			errMsg := fmt.Sprintf("unknown metric source type %q", string(metricSpec.Type))
+			r.eventRecorder.Event(chpa, v1.EventTypeWarning, "InvalidMetricSourceType", errMsg)
+			setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "InvalidMetricSourceType", "the HPA was unable to compute the replica count: %s", errMsg)
+			return 0, "", nil, time.Time{}, fmt.Errorf(errMsg)
 		}
 	}
 	return 0, "", nil, time.Time{}, nil
