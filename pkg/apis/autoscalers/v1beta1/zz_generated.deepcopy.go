@@ -20,6 +20,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	v2beta1 "k8s.io/api/autoscaling/v2beta1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -88,13 +89,15 @@ func (in *CHPAList) DeepCopyObject() runtime.Object {
 func (in *CHPASpec) DeepCopyInto(out *CHPASpec) {
 	*out = *in
 	out.ScaleTargetRef = in.ScaleTargetRef
+	if in.Metrics != nil {
+		in, out := &in.Metrics, &out.Metrics
+		*out = make([]v2beta1.MetricSpec, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.MinReplicas != nil {
 		in, out := &in.MinReplicas, &out.MinReplicas
-		*out = new(int32)
-		**out = **in
-	}
-	if in.TargetCPUUtilizationPercentage != nil {
-		in, out := &in.TargetCPUUtilizationPercentage, &out.TargetCPUUtilizationPercentage
 		*out = new(int32)
 		**out = **in
 	}
@@ -123,10 +126,19 @@ func (in *CHPAStatus) DeepCopyInto(out *CHPAStatus) {
 		in, out := &in.LastScaleTime, &out.LastScaleTime
 		*out = (*in).DeepCopy()
 	}
-	if in.CurrentCPUUtilizationPercentage != nil {
-		in, out := &in.CurrentCPUUtilizationPercentage, &out.CurrentCPUUtilizationPercentage
-		*out = new(int32)
-		**out = **in
+	if in.CurrentMetrics != nil {
+		in, out := &in.CurrentMetrics, &out.CurrentMetrics
+		*out = make([]v2beta1.MetricStatus, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.Conditions != nil {
+		in, out := &in.Conditions, &out.Conditions
+		*out = make([]v2beta1.HorizontalPodAutoscalerCondition, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	return
 }

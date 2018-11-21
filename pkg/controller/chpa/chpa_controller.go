@@ -27,16 +27,24 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+
 	chpav1beta1 "github.com/postmates/configurable-hpa/pkg/apis/autoscalers/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
-	apiv1 "k8s.io/api/core/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2beta1"
+	v1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	discocache "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/controller/podautoscaler/metrics"
 	resourceclient "k8s.io/metrics/pkg/client/clientset_generated/clientset/typed/metrics/v1beta1"
@@ -84,7 +92,11 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartLogging(glog.Infof)
 	broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: evtNamespacer.Events("")})
-	recorder := broadcaster.NewRecorder(scheme.Scheme, apiv1.EventSource{Component: "horizontal-pod-autoscaler"})
+	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "horizontal-pod-autoscaler"})
+
+	cachedDiscovery := discocache.NewMemCacheClient(clientSet.Discovery())
+	restMapper := restmapper.NewDeferredDiscoveryRESTMapper(cachedDiscovery)
+	restMapper.Reset()
 
 	replicaCalc := NewReplicaCalculator(metricsClient, clientSet.CoreV1(), defaultTolerance)
 	return &ReconcileCHPA{
@@ -92,6 +104,7 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 		scheme:        mgr.GetScheme(),
 		clientSet:     clientSet,
 		replicaCalc:   replicaCalc,
+		mapper:        restMapper,
 		eventRecorder: recorder,
 		syncPeriod:    defaultSyncPeriod,
 	}
@@ -123,6 +136,7 @@ type ReconcileCHPA struct {
 	scheme        *runtime.Scheme
 	clientSet     kubernetes.Interface
 	syncPeriod    time.Duration
+	mapper        apimeta.RESTMapper
 	eventRecorder record.EventRecorder
 	replicaCalc   *ReplicaCalculator
 }
@@ -189,6 +203,230 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 	return r.reconcileCHPA(chpa, deploy)
 }
 
+func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (reconcile.Result, error) {
+	// resRepeat will be returned if we want to re-run reconcile process
+	// NB: we can't return non-nil err, as the "reconcile" msg will be added to the rate-limited queue
+	// so that it'll slow down if we have several problems in a row
+	resRepeat := reconcile.Result{RequeueAfter: r.syncPeriod}
+	currentReplicas := deploy.Status.Replicas
+	log.Printf("-> deploy for an chpa: {%v/%v replicas:%v}\n", deploy.Namespace, deploy.Name, currentReplicas)
+	chpaStatusOriginal := chpa.Status.DeepCopy()
+
+	reference := fmt.Sprintf("%s/%s/%s", chpa.Spec.ScaleTargetRef.Kind, chpa.Namespace, chpa.Spec.ScaleTargetRef.Name)
+
+	targetGV, err := schema.ParseGroupVersion(chpa.Spec.ScaleTargetRef.APIVersion)
+	if err != nil {
+		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetScale", err.Error())
+		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedGetScale", "the HPA controller was unable to get the target's current scale: %v", err)
+		r.updateStatusIfNeeded(chpaStatusOriginal, chpa)
+		return resRepeat, nil
+		// TODO: should we return an error instead:
+		//fmt.Errorf("invalid API version in scale target reference: %v", err)
+		// and skip processing this chpa again
+	}
+
+	targetGK := schema.GroupKind{
+		Group: targetGV.Group,
+		Kind:  chpa.Spec.ScaleTargetRef.Kind,
+	}
+
+	mappings, err := r.mapper.RESTMappings(targetGK)
+	log.Printf("mappings: %v\n", mappings)
+	if err != nil {
+		errMsg := fmt.Sprintf("the HPA controller was unable to get the target's current scale: %v", err)
+		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetScale", err.Error())
+		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedGetScale", errMsg)
+		r.updateStatusIfNeeded(chpaStatusOriginal, chpa)
+		log.Printf("-> ERROR: %s", errMsg)
+		return resRepeat, nil
+	}
+	setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionTrue, "SucceededGetScale", "the HPA controller was able to get the target's current scale")
+
+	var metricStatuses []autoscalingv2.MetricStatus
+	metricDesiredReplicas := int32(0)
+	metricName := ""
+	metricTimestamp := time.Time{}
+
+	desiredReplicas := int32(0)
+	rescaleReason := ""
+	timestamp := time.Now()
+
+	rescale := true
+
+	if *deploy.Spec.Replicas == 0 {
+		// Autoscaling is disabled for this resource
+		desiredReplicas = 0
+		rescale = false
+		setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "ScalingDisabled", "scaling is disabled since the replica count of the target is zero")
+	} else if currentReplicas > chpa.Spec.MaxReplicas {
+		rescaleReason = "Current number of replicas above Spec.MaxReplicas"
+		desiredReplicas = chpa.Spec.MaxReplicas
+	} else if chpa.Spec.MinReplicas != nil && currentReplicas < *chpa.Spec.MinReplicas {
+		rescaleReason = "Current number of replicas below Spec.MinReplicas"
+		desiredReplicas = *chpa.Spec.MinReplicas
+	} else if currentReplicas == 0 {
+		rescaleReason = "Current number of replicas must be greater than 0"
+		desiredReplicas = 1
+	} else {
+		metricDesiredReplicas, metricName, metricStatuses, metricTimestamp, err = r.computeReplicasForMetrics(chpa, deploy, chpa.Spec.Metrics)
+		if err != nil {
+			r.setCurrentReplicasInStatus(chpa, currentReplicas)
+			if err := r.updateStatusIfNeeded(chpaStatusOriginal, chpa); err != nil {
+				r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedUpdateReplicas", err.Error())
+				setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedUpdateReplicas", "the CHPA controller was unable to update the number of replicas: %v", err)
+				return resRepeat, nil
+			}
+			r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedComputeMetricsReplicas", err.Error())
+			err1 := fmt.Errorf("failed to compute desired number of replicas based on listed metrics for %s: %v", reference, err)
+			return resRepeat, err1
+		}
+		glog.V(4).Infof("proposing %v desired replicas (based on %s from %s) for %s", metricDesiredReplicas, metricName, timestamp, reference)
+
+		rescaleMetric := ""
+		if metricDesiredReplicas > desiredReplicas {
+			desiredReplicas = metricDesiredReplicas
+			timestamp = metricTimestamp
+			rescaleMetric = metricName
+		}
+		if desiredReplicas > currentReplicas {
+			rescaleReason = fmt.Sprintf("%s above target", rescaleMetric)
+		}
+		if desiredReplicas < currentReplicas {
+			rescaleReason = "All metrics below target"
+		}
+		desiredReplicas = r.normalizeDesiredReplicas(chpa, currentReplicas, desiredReplicas)
+	}
+
+	return resRepeat, nil
+}
+
+// setCurrentReplicasInStatus sets the current replica count in the status of the HPA.
+func (r *ReconcileCHPA) setCurrentReplicasInStatus(chpa *chpav1beta1.CHPA, currentReplicas int32) {
+	r.setStatus(chpa, currentReplicas, chpa.Status.DesiredReplicas, chpa.Status.CurrentMetrics, false)
+}
+
+// setStatus recreates the status of the given HPA, updating the current and
+// desired replicas, as well as the metric statuses
+func (r *ReconcileCHPA) setStatus(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32, metricStatuses []autoscalingv2.MetricStatus, rescale bool) {
+	chpa.Status = chpav1beta1.CHPAStatus{
+		CurrentReplicas: currentReplicas,
+		DesiredReplicas: desiredReplicas,
+		LastScaleTime:   chpa.Status.LastScaleTime,
+		CurrentMetrics:  metricStatuses,
+		Conditions:      chpa.Status.Conditions,
+	}
+
+	if rescale {
+		now := metav1.NewTime(time.Now())
+		chpa.Status.LastScaleTime = &now
+	}
+}
+
+// normalizeDesiredReplicas takes the metrics desired replicas value and normalizes it based on the appropriate conditions (i.e. < maxReplicas, >
+// minReplicas, etc...)
+func (r *ReconcileCHPA) normalizeDesiredReplicas(chpa *chpav1beta1.CHPA, currentReplicas int32, prenormalizedDesiredReplicas int32) int32 {
+	var minReplicas int32
+	if chpa.Spec.MinReplicas != nil {
+		minReplicas = *chpa.Spec.MinReplicas
+	} else {
+		minReplicas = 0
+	}
+
+	desiredReplicas, condition, reason := convertDesiredReplicasWithRules(chpa, currentReplicas, prenormalizedDesiredReplicas, minReplicas, chpa.Spec.MaxReplicas)
+
+	if desiredReplicas == prenormalizedDesiredReplicas {
+		setCondition(chpa, autoscalingv2.ScalingLimited, v1.ConditionFalse, condition, reason)
+	} else {
+		setCondition(chpa, autoscalingv2.ScalingLimited, v1.ConditionTrue, condition, reason)
+	}
+
+	return desiredReplicas
+}
+
+// convertDesiredReplicas performs the actual normalization, without depending on `HorizontalController` or `HorizontalPodAutoscaler`
+func convertDesiredReplicasWithRules(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas, hpaMinReplicas, hpaMaxReplicas int32) (int32, string, string) {
+
+	var minimumAllowedReplicas int32
+	var maximumAllowedReplicas int32
+
+	var possibleLimitingCondition string
+	var possibleLimitingReason string
+
+	if hpaMinReplicas == 0 {
+		minimumAllowedReplicas = 1
+		possibleLimitingReason = "the desired replica count is zero"
+	} else {
+		minimumAllowedReplicas = hpaMinReplicas
+		possibleLimitingReason = "the desired replica count is less than the minimum replica count"
+	}
+
+	// Do not upscale too much to prevent incorrect rapid increase of the number of master replicas caused by
+	// bogus CPU usage report from heapster/kubelet (like in issue #32304).
+	scaleUpLimit := calculateScaleUpLimit(chpa, currentReplicas)
+
+	if hpaMaxReplicas > scaleUpLimit {
+		maximumAllowedReplicas = scaleUpLimit
+
+		possibleLimitingCondition = "ScaleUpLimit"
+		possibleLimitingReason = "the desired replica count is increasing faster than the maximum scale rate"
+	} else {
+		maximumAllowedReplicas = hpaMaxReplicas
+
+		possibleLimitingCondition = "TooManyReplicas"
+		possibleLimitingReason = "the desired replica count is more than the maximum replica count"
+	}
+
+	if desiredReplicas < minimumAllowedReplicas {
+		possibleLimitingCondition = "TooFewReplicas"
+
+		return minimumAllowedReplicas, possibleLimitingCondition, possibleLimitingReason
+	} else if desiredReplicas > maximumAllowedReplicas {
+		return maximumAllowedReplicas, possibleLimitingCondition, possibleLimitingReason
+	}
+
+	return desiredReplicas, "DesiredWithinRange", "the desired count is within the acceptable range"
+}
+
+// setCondition sets the specific condition type on the given HPA to the specified value with the given reason
+// and message.  The message and args are treated like a format string.  The condition will be added if it is
+// not present.
+func setCondition(chpa *chpav1beta1.CHPA, conditionType autoscalingv2.HorizontalPodAutoscalerConditionType, status v1.ConditionStatus, reason, message string, args ...interface{}) {
+	chpa.Status.Conditions = setConditionInList(chpa.Status.Conditions, conditionType, status, reason, message, args...)
+}
+
+// setConditionInList sets the specific condition type on the given HPA to the specified value with the given
+// reason and message.  The message and args are treated like a format string.  The condition will be added if
+// it is not present.  The new list will be returned.
+func setConditionInList(inputList []autoscalingv2.HorizontalPodAutoscalerCondition, conditionType autoscalingv2.HorizontalPodAutoscalerConditionType, status v1.ConditionStatus, reason, message string, args ...interface{}) []autoscalingv2.HorizontalPodAutoscalerCondition {
+	resList := inputList
+	var existingCond *autoscalingv2.HorizontalPodAutoscalerCondition
+	for i, condition := range resList {
+		if condition.Type == conditionType {
+			// can't take a pointer to an iteration variable
+			existingCond = &resList[i]
+			break
+		}
+	}
+
+	if existingCond == nil {
+		resList = append(resList, autoscalingv2.HorizontalPodAutoscalerCondition{
+			Type: conditionType,
+		})
+		existingCond = &resList[len(resList)-1]
+	}
+
+	if existingCond.Status != status {
+		existingCond.LastTransitionTime = metav1.Now()
+	}
+
+	existingCond.Status = status
+	existingCond.Reason = reason
+	existingCond.Message = fmt.Sprintf(message, args...)
+
+	return resList
+}
+
+/*
 func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (reconcile.Result, error) {
 	// resRepeat will be returned if we want to re-run reconcile process
 	// NB: we can't return non-nil err, as the "reconcile" msg will be added to the rate-limited queue
@@ -272,7 +510,7 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 		r.Update(context.TODO(), deploy)
 		msg := fmt.Sprintf("Successfull rescale of %s, old size: %d, new size: %d, reason: %s",
 			chpa.Name, currentReplicas, desiredReplicas, rescaleReason)
-		r.eventRecorder.Event(chpa, apiv1.EventTypeNormal, "SuccessfulRescale", msg)
+		r.eventRecorder.Event(chpa, v1.EventTypeNormal, "SuccessfulRescale", msg)
 		log.Printf(msg)
 	} else {
 		desiredReplicas = currentReplicas
@@ -280,11 +518,12 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 
 	err = r.updateStatus(chpa, currentReplicas, desiredReplicas, cpuCurrentUtilization, rescale)
 	if err != nil {
-		r.eventRecorder.Event(chpa, apiv1.EventTypeWarning, "FailedUpdateStatus", err.Error())
+		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedUpdateStatus", err.Error())
 		log.Printf("Failed to update CHPA status of '%s/%s': %v", chpa.Namespace, chpa.Name, err)
 	}
 	return resRepeat, nil
 }
+*/
 
 func setCHPADefaults(chpa *chpav1beta1.CHPA) {
 	if chpa.Spec.DownscaleForbiddenWindowSeconds == 0 {
@@ -301,10 +540,6 @@ func setCHPADefaults(chpa *chpav1beta1.CHPA) {
 	}
 	if chpa.Spec.Tolerance == 0 {
 		chpa.Spec.Tolerance = defaultTolerance
-	}
-	targetCPUUtilizationPercentage := defaultTargetCPUUtilizationPercentage
-	if chpa.Spec.TargetCPUUtilizationPercentage == nil {
-		chpa.Spec.TargetCPUUtilizationPercentage = &targetCPUUtilizationPercentage
 	}
 }
 func (r *ReconcileCHPA) checkCHPAValidity(chpa *chpav1beta1.CHPA) error {
@@ -352,61 +587,66 @@ func shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32,
 	return false
 }
 
-func (r *ReconcileCHPA) computeReplicasForCPUUtilization(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (int32, *int32, time.Time, error) {
-	targetUtilization := *chpa.Spec.TargetCPUUtilizationPercentage
+func (r *ReconcileCHPA) computeReplicasForMetrics(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment, metricSpecs []autoscalingv2.MetricSpec) (replicas int32, metric string, statuses []autoscalingv2.MetricStatus, timestamp time.Time, err error) {
 	currentReplicas := deploy.Status.Replicas
 
-	if deploy.Spec.Selector == nil {
-		errMsg := "selector is required"
-		log.Printf("%s\n", errMsg)
-		r.eventRecorder.Event(chpa, apiv1.EventTypeWarning, "SelectorRequired", errMsg)
-		return 0, nil, time.Time{}, fmt.Errorf(errMsg)
-	}
-	selector, err := metav1.LabelSelectorAsSelector(deploy.Spec.Selector)
-	if err != nil {
-		errMsg := fmt.Sprintf("couldn't convert selector string to a corresponding selector object: %v", err)
-		log.Printf("%s\n", errMsg)
-		r.eventRecorder.Event(chpa, apiv1.EventTypeWarning, "InvalidSelector", errMsg)
-		return 0, nil, time.Time{}, fmt.Errorf(errMsg)
-	}
+	statuses = make([]autoscalingv2.MetricStatus, len(metricSpecs))
 
-	desiredReplicas, utilization, _, timestamp, err := r.replicaCalc.GetResourceReplicas(currentReplicas, targetUtilization, apiv1.ResourceCPU, chpa.Namespace, selector)
-	if err != nil {
-		lastScaleTime := getLastScaleTime(chpa)
-		upscaleForbiddenWindow := time.Duration(chpa.Spec.UpscaleForbiddenWindowSeconds) * time.Second
-		if time.Now().After(lastScaleTime.Add(upscaleForbiddenWindow)) {
-			log.Printf("FailedGetMetrics: %v\n", err)
-			r.eventRecorder.Event(chpa, apiv1.EventTypeWarning, "FailedGetMetrics", err.Error())
-		} else {
-			log.Printf("MetricsNotAvailableYet: %v\n", err)
-			r.eventRecorder.Event(chpa, apiv1.EventTypeNormal, "MetricsNotAvailableYet", err.Error())
+	for i, metricSpec := range metricSpecs {
+		if deploy.Spec.Selector == nil {
+			errMsg := "selector is required"
+			r.eventRecorder.Event(chpa, v1.EventTypeWarning, "SelectorRequired", errMsg)
+			setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "InvalidSelector", "the CHPA target's deploy is missing a selector")
+			return 0, "", nil, time.Time{}, fmt.Errorf(errMsg)
 		}
 
-		return 0, nil, time.Time{}, fmt.Errorf("failed to get CPU utilization: %v", err)
-	}
+		selector, err := metav1.LabelSelectorAsSelector(deploy.Spec.Selector)
+		if err != nil {
+			errMsg := fmt.Sprintf("couldn't convert selector into a corresponding internal selector object: %v", err)
+			log.Printf("%s\n", errMsg)
+			r.eventRecorder.Event(chpa, v1.EventTypeWarning, "InvalidSelector", errMsg)
+			setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "InvalidSelector", errMsg)
+			return 0, "", nil, time.Time{}, fmt.Errorf(errMsg)
+		}
 
-	if desiredReplicas != currentReplicas {
-		msg := fmt.Sprintf("Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
-			desiredReplicas, utilization, deploy.Status.Replicas)
-		r.eventRecorder.Event(chpa, apiv1.EventTypeNormal, "DesiredReplicasComputed", msg)
-		log.Printf("-> %s", msg)
-	}
+		var replicaCountProposal int32
+		var utilizationProposal int64
+		var timestampProposal time.Time
+		var metricNameProposal string
 
-	return desiredReplicas, &utilization, timestamp, nil
+		switch metricSpec.Type {
+		case autoscalingv2.ObjectMetricSourceType:
+			replicaCountProposal, utilizationProposal, timestampProposal, err = r.replicaCalc.GetObjectMetricReplicas(currentReplicas, metricSpec.Object.TargetValue.MilliValue(), metricSpec.Object.MetricName, chpa.Namespace, &metricSpec.Object.Target)
+			if err != nil {
+				r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetObjectMetric", err.Error())
+				setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "FailedGetObjectMetric", "the HPA was unable to compute the replica count: %v", err)
+				return 0, "", nil, time.Time{}, fmt.Errorf("failed to get object metric value: %v", err)
+			}
+			metricNameProposal = fmt.Sprintf("%s metric %s", metricSpec.Object.Target.Kind, metricSpec.Object.MetricName)
+			statuses[i] = autoscalingv2.MetricStatus{
+				Type: autoscalingv2.ObjectMetricSourceType,
+				Object: &autoscalingv2.ObjectMetricStatus{
+					Target:       metricSpec.Object.Target,
+					MetricName:   metricSpec.Object.MetricName,
+					CurrentValue: *resource.NewMilliQuantity(utilizationProposal, resource.DecimalSI),
+				},
+			}
+		}
+	}
+	return 0, "", nil, time.Time{}, nil
 }
 
-func (r *ReconcileCHPA) updateStatus(chpa *chpav1beta1.CHPA, currentReplicas, desiredReplicas int32, cpuCurrentUtilization *int32, rescale bool) error {
-	chpa.Status.CurrentReplicas = currentReplicas
-	chpa.Status.DesiredReplicas = desiredReplicas
-	chpa.Status.CurrentCPUUtilizationPercentage = cpuCurrentUtilization
-
-	if rescale {
-		now := metav1.NewTime(time.Now())
-		chpa.Status.LastScaleTime = &now
+// updateStatusIfNeeded calls updateStatus only if the status of the new HPA is not the same as the old status
+func (r *ReconcileCHPA) updateStatusIfNeeded(oldStatus *chpav1beta1.CHPAStatus, newCHPA *chpav1beta1.CHPA) error {
+	// skip a write if we wouldn't need to update
+	if apiequality.Semantic.DeepEqual(oldStatus, &newCHPA.Status) {
+		return nil
 	}
-	r.Update(context.TODO(), chpa)
+	return r.updateCHPA(newCHPA)
+}
 
-	return nil
+func (r *ReconcileCHPA) updateCHPA(chpa *chpav1beta1.CHPA) error {
+	return r.Update(context.TODO(), chpa)
 }
 
 // getLastScaleTime returns the chpa's last scale time or the chpa's creation time if the last scale time is nil.

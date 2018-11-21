@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	autoscalingv2 "k8s.io/api/autoscaling/v2beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -84,24 +85,24 @@ type CHPASpec struct {
 	// reference to scaled resource; horizontal pod autoscaler will learn the current resource consumption
 	// and will set the desired number of pods by using its Scale subresource.
 	ScaleTargetRef CrossVersionObjectReference `json:"scaleTargetRef"`
+	// specifications that will be used to calculated the desired replica count
+	Metrics []autoscalingv2.MetricSpec `json:"metrics,omitempty"`
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=1000
 	MinReplicas *int32 `json:"minReplicas,omitempty"`
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=1000
 	MaxReplicas int32 `json:"maxReplicas"`
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=100
-	TargetCPUUtilizationPercentage *int32 `json:"targetCPUUtilizationPercentage,omitempty"`
 }
 
 // CHPAStatus defines the observed state of CHPA
 type CHPAStatus struct {
-	ObservedGeneration              *int64       `json:"observedGeneration,omitempty"`
-	LastScaleTime                   *metav1.Time `json:"lastScaleTime,omitempty"`
-	CurrentReplicas                 int32        `json:"currentReplicas"`
-	DesiredReplicas                 int32        `json:"desiredReplicas"`
-	CurrentCPUUtilizationPercentage *int32       `json:"currentCPUUtilizationPercentage,omitempty"`
+	ObservedGeneration *int64                                           `json:"observedGeneration,omitempty"`
+	LastScaleTime      *metav1.Time                                     `json:"lastScaleTime,omitempty"`
+	CurrentReplicas    int32                                            `json:"currentReplicas"`
+	DesiredReplicas    int32                                            `json:"desiredReplicas"`
+	CurrentMetrics     []autoscalingv2.MetricStatus                     `json:"currentMetrics"`
+	Conditions         []autoscalingv2.HorizontalPodAutoscalerCondition `json:"conditions"`
 }
 
 // +genclient
