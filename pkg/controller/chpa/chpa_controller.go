@@ -697,6 +697,52 @@ func (r *ReconcileCHPA) computeReplicasForMetrics(chpa *chpav1beta1.CHPA, deploy
 					CurrentAverageValue: *resource.NewMilliQuantity(utilizationProposal, resource.DecimalSI),
 				},
 			}
+		case autoscalingv2.ResourceMetricSourceType:
+			if metricSpec.Resource.TargetAverageValue != nil {
+				var rawProposal int64
+				replicaCountProposal, rawProposal, timestampProposal, err = r.replicaCalc.GetRawResourceReplicas(currentReplicas, metricSpec.Resource.TargetAverageValue.MilliValue(), metricSpec.Resource.Name, chpa.Namespace, selector)
+				if err != nil {
+					r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetResourceMetric", err.Error())
+					setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "FailedGetResourceMetric", "the HPA was unable to compute the replica count: %v", err)
+					return 0, "", nil, time.Time{}, fmt.Errorf("failed to get %s utilization: %v", metricSpec.Resource.Name, err)
+				}
+				metricNameProposal = fmt.Sprintf("%s resource", metricSpec.Resource.Name)
+				statuses[i] = autoscalingv2.MetricStatus{
+					Type: autoscalingv2.ResourceMetricSourceType,
+					Resource: &autoscalingv2.ResourceMetricStatus{
+						Name:                metricSpec.Resource.Name,
+						CurrentAverageValue: *resource.NewMilliQuantity(rawProposal, resource.DecimalSI),
+					},
+				}
+			} else {
+				// set a default utilization percentage if none is set
+				if metricSpec.Resource.TargetAverageUtilization == nil {
+					errMsg := "invalid resource metric source: neither a utilization target nor a value target was set"
+					r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetResourceMetric", errMsg)
+					setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "FailedGetResourceMetric", "the HPA was unable to compute the replica count: %s", errMsg)
+					return 0, "", nil, time.Time{}, fmt.Errorf(errMsg)
+				}
+
+				targetUtilization := *metricSpec.Resource.TargetAverageUtilization
+
+				var percentageProposal int32
+				var rawProposal int64
+				replicaCountProposal, percentageProposal, rawProposal, timestampProposal, err = r.replicaCalc.GetResourceReplicas(currentReplicas, targetUtilization, metricSpec.Resource.Name, chpa.Namespace, selector)
+				if err != nil {
+					r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetResourceMetric", err.Error())
+					setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "FailedGetResourceMetric", "the HPA was unable to compute the replica count: %v", err)
+					return 0, "", nil, time.Time{}, fmt.Errorf("failed to get %s utilization: %v", metricSpec.Resource.Name, err)
+				}
+				metricNameProposal = fmt.Sprintf("%s resource utilization (percentage of request)", metricSpec.Resource.Name)
+				statuses[i] = autoscalingv2.MetricStatus{
+					Type: autoscalingv2.ResourceMetricSourceType,
+					Resource: &autoscalingv2.ResourceMetricStatus{
+						Name:                      metricSpec.Resource.Name,
+						CurrentAverageUtilization: &percentageProposal,
+						CurrentAverageValue:       *resource.NewMilliQuantity(rawProposal, resource.DecimalSI),
+					},
+				}
+			}
 		}
 	}
 	return 0, "", nil, time.Time{}, nil
