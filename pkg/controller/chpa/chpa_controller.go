@@ -788,8 +788,15 @@ func (r *ReconcileCHPA) computeReplicasForMetrics(chpa *chpav1beta1.CHPA, deploy
 			setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "InvalidMetricSourceType", "the HPA was unable to compute the replica count: %s", errMsg)
 			return 0, "", nil, time.Time{}, fmt.Errorf(errMsg)
 		}
+		if replicas == 0 || replicaCountProposal > replicas {
+			timestamp = timestampProposal
+			replicas = replicaCountProposal
+			metric = metricNameProposal
+		}
 	}
-	return 0, "", nil, time.Time{}, nil
+
+	setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionTrue, "ValidMetricFound", "the HPA was able to successfully calculate a replica count from %s", metric)
+	return replicas, metric, statuses, timestamp, nil
 }
 
 // updateStatusIfNeeded calls updateStatus only if the status of the new HPA is not the same as the old status
