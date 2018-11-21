@@ -389,7 +389,6 @@ func (r *ReconcileCHPA) computeReplicasForCPUUtilization(chpa *chpav1beta1.CHPA,
 		msg := fmt.Sprintf("Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
 			desiredReplicas, utilization, deploy.Status.Replicas)
 		r.eventRecorder.Event(chpa, apiv1.EventTypeNormal, "DesiredReplicasComputed", msg)
-		//	"Computed the desired num of replicas: %d (avgCPUutil: %d, current replicas: %d)",
 		log.Printf("-> %s", msg)
 	}
 

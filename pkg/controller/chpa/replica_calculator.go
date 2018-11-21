@@ -44,7 +44,7 @@ const (
 	defaultTestingTolerance = 0.1
 )
 
-// ReplicaCalculator is responsible to calculate number of replicas
+// ReplicaCalculator is responsible for calculation of the number of replicas
 // It contains all the needed information
 type ReplicaCalculator struct {
 	metricsClient metricsclient.MetricsClient
