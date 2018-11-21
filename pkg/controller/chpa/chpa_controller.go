@@ -682,6 +682,21 @@ func (r *ReconcileCHPA) computeReplicasForMetrics(chpa *chpav1beta1.CHPA, deploy
 					CurrentValue: *resource.NewMilliQuantity(utilizationProposal, resource.DecimalSI),
 				},
 			}
+		case autoscalingv2.PodsMetricSourceType:
+			replicaCountProposal, utilizationProposal, timestampProposal, err = r.replicaCalc.GetMetricReplicas(currentReplicas, metricSpec.Pods.TargetAverageValue.MilliValue(), metricSpec.Pods.MetricName, chpa.Namespace, selector)
+			if err != nil {
+				r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetPodsMetric", err.Error())
+				setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "FailedGetPodsMetric", "the HPA was unable to compute the replica count: %v", err)
+				return 0, "", nil, time.Time{}, fmt.Errorf("failed to get pods metric value: %v", err)
+			}
+			metricNameProposal = fmt.Sprintf("pods metric %s", metricSpec.Pods.MetricName)
+			statuses[i] = autoscalingv2.MetricStatus{
+				Type: autoscalingv2.PodsMetricSourceType,
+				Pods: &autoscalingv2.PodsMetricStatus{
+					MetricName:          metricSpec.Pods.MetricName,
+					CurrentAverageValue: *resource.NewMilliQuantity(utilizationProposal, resource.DecimalSI),
+				},
+			}
 		}
 	}
 	return 0, "", nil, time.Time{}, nil
