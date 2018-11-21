@@ -38,7 +38,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	discocache "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/kubernetes"
@@ -207,6 +206,7 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 	// resRepeat will be returned if we want to re-run reconcile process
 	// NB: we can't return non-nil err, as the "reconcile" msg will be added to the rate-limited queue
 	// so that it'll slow down if we have several problems in a row
+	var err error
 	resRepeat := reconcile.Result{RequeueAfter: r.syncPeriod}
 	currentReplicas := deploy.Status.Replicas
 	log.Printf("-> deploy for an chpa: {%v/%v replicas:%v}\n", deploy.Namespace, deploy.Name, currentReplicas)
@@ -214,32 +214,6 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 
 	reference := fmt.Sprintf("%s/%s/%s", chpa.Spec.ScaleTargetRef.Kind, chpa.Namespace, chpa.Spec.ScaleTargetRef.Name)
 
-	targetGV, err := schema.ParseGroupVersion(chpa.Spec.ScaleTargetRef.APIVersion)
-	if err != nil {
-		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetScale", err.Error())
-		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedGetScale", "the HPA controller was unable to get the target's current scale: %v", err)
-		r.updateStatusIfNeeded(chpaStatusOriginal, chpa)
-		return resRepeat, nil
-		// TODO: should we return an error instead:
-		//fmt.Errorf("invalid API version in scale target reference: %v", err)
-		// and skip processing this chpa again
-	}
-
-	targetGK := schema.GroupKind{
-		Group: targetGV.Group,
-		Kind:  chpa.Spec.ScaleTargetRef.Kind,
-	}
-
-	mappings, err := r.mapper.RESTMappings(targetGK)
-	log.Printf("mappings: %v\n", mappings)
-	if err != nil {
-		errMsg := fmt.Sprintf("the HPA controller was unable to get the target's current scale: %v", err)
-		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedGetScale", err.Error())
-		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedGetScale", errMsg)
-		r.updateStatusIfNeeded(chpaStatusOriginal, chpa)
-		log.Printf("-> ERROR: %s", errMsg)
-		return resRepeat, nil
-	}
 	setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionTrue, "SucceededGetScale", "the HPA controller was able to get the target's current scale")
 
 	var metricStatuses []autoscalingv2.MetricStatus
