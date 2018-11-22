@@ -34,16 +34,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	discocache "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/controller/podautoscaler/metrics"
 	resourceclient "k8s.io/metrics/pkg/client/clientset_generated/clientset/typed/metrics/v1beta1"
@@ -93,17 +90,12 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: evtNamespacer.Events("")})
 	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "horizontal-pod-autoscaler"})
 
-	cachedDiscovery := discocache.NewMemCacheClient(clientSet.Discovery())
-	restMapper := restmapper.NewDeferredDiscoveryRESTMapper(cachedDiscovery)
-	restMapper.Reset()
-
 	replicaCalc := NewReplicaCalculator(metricsClient, clientSet.CoreV1(), defaultTolerance)
 	return &ReconcileCHPA{
 		Client:        mgr.GetClient(),
 		scheme:        mgr.GetScheme(),
 		clientSet:     clientSet,
 		replicaCalc:   replicaCalc,
-		mapper:        restMapper,
 		eventRecorder: recorder,
 		syncPeriod:    defaultSyncPeriod,
 	}
@@ -135,7 +127,6 @@ type ReconcileCHPA struct {
 	scheme        *runtime.Scheme
 	clientSet     kubernetes.Interface
 	syncPeriod    time.Duration
-	mapper        apimeta.RESTMapper
 	eventRecorder record.EventRecorder
 	replicaCalc   *ReplicaCalculator
 }
