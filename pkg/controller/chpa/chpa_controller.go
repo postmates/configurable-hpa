@@ -49,8 +49,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -101,6 +103,19 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	}
 }
 
+// when the CHPA is changed (status is changed, edited by the user, etc),
+// a new "UpdateEvent" is generated and passed to the "updatePredicate" function
+// if the function returns "true", the event is added to the "Reconcile" queue
+// if the function returns "false", the event is skipped
+func updatePredicate(ev event.UpdateEvent) bool {
+	oldObject := ev.ObjectOld.(*chpav1beta1.CHPA)
+	newObject := ev.ObjectNew.(*chpav1beta1.CHPA)
+	// return true only if the target object is changed
+	// all other object changes will be applied during next "Reconcile" call
+	res := newObject.Spec.ScaleTargetRef != oldObject.Spec.ScaleTargetRef
+	return res
+}
+
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
@@ -110,7 +125,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to CHPA
-	err = c.Watch(&source.Kind{Type: &chpav1beta1.CHPA{}}, &handler.EnqueueRequestForObject{})
+	predicate := predicate.Funcs{UpdateFunc: updatePredicate}
+	err = c.Watch(&source.Kind{Type: &chpav1beta1.CHPA{}}, &handler.EnqueueRequestForObject{}, predicate)
 	if err != nil {
 		return err
 	}
