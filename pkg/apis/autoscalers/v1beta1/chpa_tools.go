@@ -45,11 +45,10 @@ func (chpa_spec CHPASpec) String() string {
 }
 
 func (chpa_status CHPAStatus) String() string {
-	curCPU := "<nil>"
 	lastScaleTime := "<nil>"
 	if chpa_status.LastScaleTime != nil {
 		lastScaleTime = fmt.Sprintf("%v", *chpa_status.LastScaleTime)
 	}
-	ret := fmt.Sprintf("{LST:%v CR:%v DR:%v CCPUUP:%v}", lastScaleTime, chpa_status.CurrentReplicas, chpa_status.DesiredReplicas, curCPU)
+	ret := fmt.Sprintf("{LST:%v CR:%v DR:%v}", lastScaleTime, chpa_status.CurrentReplicas, chpa_status.DesiredReplicas)
 	return ret
 }
