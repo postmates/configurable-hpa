@@ -149,8 +149,8 @@ type ReconcileCHPA struct {
 
 // Reconcile reads that state of the cluster for a CHPA object and makes changes based on the state read
 // and what is in the CHPA.Spec
-// The implementation repeats kubernetes hpa implementation in v1.5.8
-//		(last version before k8s.io/api/autoscaling/v2beta1 MetricsSpec was added)
+// The implementation repeats kubernetes hpa implementation in v1.10.8
+
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
 // TODO: decide, what to use: patch or update in rbac
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;update;patch
@@ -258,8 +258,8 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 				return resRepeat, nil
 			}
 			r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedComputeMetricsReplicas", err.Error())
-			err1 := fmt.Errorf("failed to compute desired number of replicas based on listed metrics for %s: %v", reference, err)
-			return resRepeat, err1
+			log.Printf("failed to compute desired number of replicas based on listed metrics for %s: %v", reference, err)
+			return resRepeat, nil
 		}
 		glog.V(4).Infof("proposing %v desired replicas (based on %s from %s) for %s", metricDesiredReplicas, metricName, timestamp, reference)
 
@@ -275,6 +275,7 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 		if desiredReplicas < currentReplicas {
 			rescaleReason = "All metrics below target"
 		}
+
 		desiredReplicas = r.normalizeDesiredReplicas(chpa, currentReplicas, desiredReplicas)
 
 		rescale = r.shouldScale(chpa, currentReplicas, desiredReplicas, timestamp)
