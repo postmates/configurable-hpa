@@ -3,12 +3,17 @@ kind: CHPA
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: chpa-sample2
+  name: chpa-sample1
 spec:
   downscaleForbiddenWindowSeconds: 15
   upscaleForbiddenWindowSeconds: 15
   scaleTargetRef:
     kind: Deployment
-    name: chpa-example2
-  minReplicas: 1
-  maxReplicas: 10
+    name: ivan-chpa-example
+  minReplicas: 2
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageValue: 500

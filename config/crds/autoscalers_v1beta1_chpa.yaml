@@ -32,6 +32,10 @@ spec:
               maximum: 1000
               minimum: 1
               type: integer
+            metrics:
+              items:
+                type: object
+              type: array
             minReplicas:
               format: int32
               maximum: 1000
@@ -59,11 +63,6 @@ spec:
               maximum: 20
               minimum: 1
               type: integer
-            targetCPUUtilizationPercentage:
-              format: int32
-              maximum: 100
-              minimum: 0
-              type: integer
             tolerance:
               format: double
               maximum: 0.99
@@ -80,9 +79,14 @@ spec:
           type: object
         status:
           properties:
-            currentCPUUtilizationPercentage:
-              format: int32
-              type: integer
+            conditions:
+              items:
+                type: object
+              type: array
+            currentMetrics:
+              items:
+                type: object
+              type: array
             currentReplicas:
               format: int32
               type: integer
@@ -98,6 +102,8 @@ spec:
           required:
           - currentReplicas
           - desiredReplicas
+          - currentMetrics
+          - conditions
           type: object
   version: v1beta1
 status:

@@ -30,9 +30,7 @@ func (chpa_spec CHPASpec) String() string {
 	if chpa_spec.MinReplicas != nil {
 		minReplicas = fmt.Sprintf("%v", *chpa_spec.MinReplicas)
 	}
-	metrics := "[]" // Map(chpa_spec.Metrics, func(metric scalev2b1.MetricSpec
-
-	ret := fmt.Sprintf("{Ref:%v/%v DFWS:%v UFWS:%v SULF:%v SULM:%v T:%v MinR:%v MaxR:%v M:%s}",
+	ret := fmt.Sprintf("{Ref:%v/%v DFWS:%v UFWS:%v SULF:%v SULM:%v T:%v MinR:%v MaxR:%v M:%v}",
 		chpa_spec.ScaleTargetRef.Kind,
 		chpa_spec.ScaleTargetRef.Name,
 		chpa_spec.DownscaleForbiddenWindowSeconds,
@@ -42,7 +40,7 @@ func (chpa_spec CHPASpec) String() string {
 		chpa_spec.Tolerance,
 		minReplicas,
 		chpa_spec.MaxReplicas,
-		metrics)
+		chpa_spec.Metrics)
 	return ret
 }
 

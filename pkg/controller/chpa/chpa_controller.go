@@ -216,7 +216,7 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 	var err error
 	resRepeat := reconcile.Result{RequeueAfter: r.syncPeriod}
 	currentReplicas := deploy.Status.Replicas
-	log.Printf("-> deploy for an chpa: {%v/%v replicas:%v}\n", deploy.Namespace, deploy.Name, currentReplicas)
+	log.Printf("-> deploy: {%v/%v replicas:%v}\n", deploy.Namespace, deploy.Name, currentReplicas)
 	chpaStatusOriginal := chpa.Status.DeepCopy()
 
 	reference := fmt.Sprintf("%s/%s/%s", chpa.Spec.ScaleTargetRef.Kind, chpa.Namespace, chpa.Spec.ScaleTargetRef.Name)
@@ -255,13 +255,14 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 			if err := r.updateStatusIfNeeded(chpaStatusOriginal, chpa); err != nil {
 				r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedUpdateReplicas", err.Error())
 				setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedUpdateReplicas", "the CHPA controller was unable to update the number of replicas: %v", err)
+				log.Printf("the CHPA controller was unable to update the number of replicas: %v", err)
 				return resRepeat, nil
 			}
 			r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedComputeMetricsReplicas", err.Error())
 			log.Printf("failed to compute desired number of replicas based on listed metrics for %s: %v", reference, err)
 			return resRepeat, nil
 		}
-		glog.V(4).Infof("proposing %v desired replicas (based on %s from %s) for %s", metricDesiredReplicas, metricName, timestamp, reference)
+		log.Printf("proposing %v desired replicas (based on %s from %s) for %s", metricDesiredReplicas, metricName, timestamp, reference)
 
 		rescaleMetric := ""
 		if metricDesiredReplicas > desiredReplicas {
@@ -277,6 +278,7 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 		}
 
 		desiredReplicas = r.normalizeDesiredReplicas(chpa, currentReplicas, desiredReplicas)
+		log.Printf(" -> after normalization: %v", desiredReplicas)
 
 		rescale = r.shouldScale(chpa, currentReplicas, desiredReplicas, timestamp)
 		backoffDown := false
@@ -320,10 +322,10 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 		}
 		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionTrue, "SucceededRescale", "the HPA controller was able to update the target scale to %d", desiredReplicas)
 		r.eventRecorder.Eventf(chpa, v1.EventTypeNormal, "SuccessfulRescale", "New size: %d; reason: %s", desiredReplicas, rescaleReason)
-		glog.Infof("Successful rescale of %s, old size: %d, new size: %d, reason: %s",
+		log.Printf("Successful rescale of %s, old size: %d, new size: %d, reason: %s",
 			chpa.Name, currentReplicas, desiredReplicas, rescaleReason)
 	} else {
-		glog.V(4).Infof("decided not to scale %s to %v (last scale time was %s)", reference, desiredReplicas, chpa.Status.LastScaleTime)
+		log.Printf("decided not to scale %s to %v (last scale time was %s)", reference, desiredReplicas, chpa.Status.LastScaleTime)
 		desiredReplicas = currentReplicas
 	}
 
@@ -537,7 +539,6 @@ func (r *ReconcileCHPA) computeReplicasForMetrics(chpa *chpav1beta1.CHPA, deploy
 		selector, err := metav1.LabelSelectorAsSelector(deploy.Spec.Selector)
 		if err != nil {
 			errMsg := fmt.Sprintf("couldn't convert selector into a corresponding internal selector object: %v", err)
-			log.Printf("%s\n", errMsg)
 			r.eventRecorder.Event(chpa, v1.EventTypeWarning, "InvalidSelector", errMsg)
 			setCondition(chpa, autoscalingv2.ScalingActive, v1.ConditionFalse, "InvalidSelector", errMsg)
 			return 0, "", nil, time.Time{}, fmt.Errorf(errMsg)

@@ -51,6 +51,11 @@ spec:
     name: chpa-example
   minReplicas: 1
   maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 50
 EOF
 ```
 
@@ -173,6 +178,7 @@ Here's a list of things that must be done next:
 - (done) Check RBAC rules
 - (done) Check how several chpa objects works together
 - (done) Check OWNERship (solution: add `--cascade=false` parameter)
+- catch exception + print stack
 - ScaleUpLimitPods + ScaleUpLimitPercentages
 - tests for scaleuplimit*
 - tests for incorrect chpa

@@ -5,12 +5,15 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: chpa-sample1
 spec:
-  downscaleForbiddenWindowSeconds: 300
-  upscaleForbiddenWindowSeconds: 300
-  tolerance: 0.1
+  downscaleForbiddenWindowSeconds: 15
+  upscaleForbiddenWindowSeconds: 15
   scaleTargetRef:
     kind: Deployment
-    name: chpa-example1
+    name: ivan-chpa-example
   minReplicas: 2
   maxReplicas: 3
-  targetCPUUtilizationPercentage: 42
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 50
