@@ -93,7 +93,7 @@ class TestRaiseToMax(HPATestCase):
     def test_me(self):
         """ test something """
         name = self.resource_name()
-        chpa_obj = chpa.CHPA(name, 8, name, {"targetCPUUtilizationPercentage": 10})
+        chpa_obj = chpa.CHPA(name, 8, name)
         test_helper.check_output(["kubectl", "apply", "-f", chpa_obj.save_to_tmp_file()])
 
         self.add_cpu_load(0.5)
@@ -115,8 +115,7 @@ class TestRaiseToMaxFast(HPATestCase):
     def test_me(self):
         """ test something """
         name = self.resource_name()
-        chpa_obj = chpa.CHPA(name, 8, name, {"scaleUpLimitFactor": 10.0,
-                                             "targetCPUUtilizationPercentage": 10})
+        chpa_obj = chpa.CHPA(name, 8, name, {"scaleUpLimitFactor": 10.0})
         test_helper.check_output(["kubectl", "apply", "-f", chpa_obj.save_to_tmp_file()])
 
         self.add_cpu_load(0.5)

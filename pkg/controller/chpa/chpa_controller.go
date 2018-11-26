@@ -508,7 +508,7 @@ func (r *ReconcileCHPA) shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, des
 		if chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow).Before(timestamp) {
 			return true
 		}
-		log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow))
+		log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s, last metrics timestamp: %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(downscaleForbiddenWindow), timestamp)
 	}
 
 	// Scale up only if the usage ratio increased significantly above the target
@@ -518,7 +518,7 @@ func (r *ReconcileCHPA) shouldScale(chpa *chpav1beta1.CHPA, currentReplicas, des
 		if chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow).Before(timestamp) {
 			return true
 		}
-		log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow))
+		log.Printf("Too early to scale. Last scale was at %s, next scale will be at %s, last metrics timestamp: %s", chpa.Status.LastScaleTime, chpa.Status.LastScaleTime.Add(upscaleForbiddenWindow), timestamp)
 	}
 	return false
 }
