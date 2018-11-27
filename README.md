@@ -189,7 +189,7 @@ Here's a list of things that must be done next:
 - catch exception + print stack
 - ScaleUpLimitPods + ScaleUpLimitPercentages
 - tests for scaleuplimit*
-- tests for incorrect chpa
+- tests for incorrect chpa spec + check that if you fix it - chpa works
 - Check how to deal with CHPA version change v1beta1 -> v1beta2
 - (done) Switch from v1.5.8 to v1.10.8 for replica_calculator to use the newest metrics-server functionality
 - (done) Check RBAC rules

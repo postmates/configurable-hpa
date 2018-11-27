@@ -110,10 +110,12 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 func updatePredicate(ev event.UpdateEvent) bool {
 	oldObject := ev.ObjectOld.(*chpav1beta1.CHPA)
 	newObject := ev.ObjectNew.(*chpav1beta1.CHPA)
-	// return true only if the target object has changed
-	// all other object changes will be applied during the next "Reconcile" call
-	res := newObject.Spec.ScaleTargetRef != oldObject.Spec.ScaleTargetRef
-	return res
+	// add the chpa object to the queue only if the spec has changed
+	// status change should not lead to a requeue
+	if !apiequality.Semantic.DeepEqual(newObject.Spec, oldObject.Spec) {
+		return true
+	}
+	return false
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -181,13 +183,16 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 	}
 
 	setCHPADefaults(chpa)
-	log.Printf("-> chpa: %v\n", chpa.String())
 
-	if err := r.checkCHPAValidity(chpa); err != nil {
+	if err := checkCHPAValidity(chpa); err != nil {
 		log.Printf("Got an invalid CHPA spec '%v': %v", request.NamespacedName, err)
-		// the chpa spec still persists, so we should go on processing it
-		return resRepeat, nil
+		// the chpa spec is incorrect (most likely, in "metrics" section) stop processing it
+		// when the spec is updated, the chpa will be re-added to the reconcile queue
+		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedSpecCheck", err.Error())
+		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedSpecCheck", "Invalid CHPA specification: %s", err)
+		return resStop, nil
 	}
+	log.Printf("-> chpa: %v\n", chpa.String())
 
 	// kind := chpa.Spec.ScaleTargetRef.Kind
 	namespace := chpa.Namespace
@@ -206,15 +211,26 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 		return resRepeat, nil
 	}
 
-	return r.reconcileCHPA(chpa, deploy)
+	if err := r.reconcileCHPA(chpa, deploy); err != nil {
+		// should never happen, actually
+		log.Printf(err.Error())
+		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedProcessCHPA", err.Error())
+		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionTrue, "FailedProcessCHPA", "Error happened while processing the CHPA")
+		// we shouldn't stop processing the CHPA, as it might be a temporal problem
+		return resRepeat, nil
+	}
+	return resRepeat, nil
 }
 
-func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (reconcile.Result, error) {
-	// resRepeat will be returned if we want to re-run reconcile process
-	// NB: we can't return non-nil err, as the "reconcile" msg will be added to the rate-limited queue
-	// so that it'll slow down if we have several problems in a row
-	var err error
-	resRepeat := reconcile.Result{RequeueAfter: r.syncPeriod}
+// Function returns error only in case when we need to stop working with the CHPA spec
+// The only case for now is incorrect specification
+// All other cases are ok as it may be temporal problem and be fixed later by itself
+func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (err error) {
+	defer func() {
+		if err1 := recover(); err1 != nil {
+			err = fmt.Errorf("RunTime error in reconcileCHPA: %s", err1)
+		}
+	}()
 	currentReplicas := deploy.Status.Replicas
 	log.Printf("-> deploy: {%v/%v replicas:%v}\n", deploy.Namespace, deploy.Name, currentReplicas)
 	chpaStatusOriginal := chpa.Status.DeepCopy()
@@ -256,11 +272,11 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 				r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedUpdateReplicas", err.Error())
 				setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedUpdateReplicas", "the CHPA controller was unable to update the number of replicas: %v", err)
 				log.Printf("the CHPA controller was unable to update the number of replicas: %v", err)
-				return resRepeat, nil
+				return nil
 			}
 			r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedComputeMetricsReplicas", err.Error())
 			log.Printf("failed to compute desired number of replicas based on listed metrics for %s: %v", reference, err)
-			return resRepeat, nil
+			return nil
 		}
 		log.Printf("proposing %v desired replicas (based on %s from %s) for %s", metricDesiredReplicas, metricName, timestamp, reference)
 
@@ -316,9 +332,9 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 			if err := r.updateStatusIfNeeded(chpaStatusOriginal, chpa); err != nil {
 				r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedUpdateReplicas", err.Error())
 				setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedUpdateReplicas", "the CHPA controller was unable to update the number of replicas: %v", err)
-				return resRepeat, nil
+				return nil
 			}
-			return resRepeat, nil
+			return nil
 		}
 		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionTrue, "SucceededRescale", "the HPA controller was able to update the target scale to %d", desiredReplicas)
 		r.eventRecorder.Eventf(chpa, v1.EventTypeNormal, "SuccessfulRescale", "New size: %d; reason: %s", desiredReplicas, rescaleReason)
@@ -332,7 +348,7 @@ func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Dep
 	r.setStatus(chpa, currentReplicas, desiredReplicas, metricStatuses, rescale)
 	r.updateStatusIfNeeded(chpaStatusOriginal, chpa)
 
-	return resRepeat, nil
+	return nil
 }
 
 // setCurrentReplicasInStatus sets the current replica count in the status of the HPA.
@@ -478,11 +494,41 @@ func setCHPADefaults(chpa *chpav1beta1.CHPA) {
 		chpa.Spec.Tolerance = defaultTolerance
 	}
 }
-func (r *ReconcileCHPA) checkCHPAValidity(chpa *chpav1beta1.CHPA) error {
+func checkCHPAValidity(chpa *chpav1beta1.CHPA) error {
 	if chpa.Spec.ScaleTargetRef.Kind != "Deployment" {
 		msg := fmt.Sprintf("configurable chpa doesn't support %s kind, use Deployment instead", chpa.Spec.ScaleTargetRef.Kind)
 		log.Printf(msg)
 		return fmt.Errorf(msg)
+	}
+	return checkCHPAMetricsValidity(chpa.Spec.Metrics)
+}
+
+func checkCHPAMetricsValidity(metrics []autoscalingv2.MetricSpec) (err error) {
+	// this function will not be needed for the vanilla k8s
+	// for now we check only nil pointers here as they crash the default controller algorithm
+	// and I want to make it as close to the vanilla one, as I can
+	for _, metric := range metrics {
+		switch metric.Type {
+		case "Object":
+			if metric.Object == nil {
+				return fmt.Errorf("metric.Object is nil while metric.Type is '%s'", metric.Type)
+			}
+		case "Pods":
+			if metric.Pods == nil {
+				return fmt.Errorf("metric.Pods is nil while metric.Type is '%s'", metric.Type)
+			}
+		case "Resource":
+			if metric.Resource == nil {
+				return fmt.Errorf("metric.Resource is nil while metric.Type is '%s'", metric.Type)
+			}
+		case "External":
+			if metric.External == nil {
+				return fmt.Errorf("metric.External is nil while metric.Type is '%s'", metric.Type)
+			}
+		default:
+			return fmt.Errorf("incorrect metric.Type: '%s'", metric.Type)
+		}
+
 	}
 	return nil
 }
