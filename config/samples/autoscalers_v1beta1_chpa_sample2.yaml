@@ -9,7 +9,7 @@ spec:
   upscaleForbiddenWindowSeconds: 15
   scaleTargetRef:
     kind: Deployment
-    name: ivan-chpa-example
+    name: chpa-example1
   minReplicas: 2
   maxReplicas: 3
   metrics:

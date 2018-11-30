@@ -130,11 +130,11 @@ kubectl delete deploy/my-load-generator deploy/chpa-example
 
 There're two places where you can check problems with your CHPA:
 
-- CHPA object itself. It contains "Events" and "Conditions" that are filled with the CHPA controller. In case of any problem with the CHPA you should check these fields.
+- CHPA object itself. It contains "Events" and "Conditions" that are filled by the CHPA controller. In case of any problem with the CHPA you should check these fields.
 
     kubectl describe chpas.autoscalers.postmates.com chpa-example1
 
-- CHPA controller logs. It may contain information about controller problems (couldn't connect to the server, etc)
+- CHPA controller logs. The logs may contain information about controller problems (couldn't connect to the server, etc)
 
     stern -n kube-system configurable-hpa
 
