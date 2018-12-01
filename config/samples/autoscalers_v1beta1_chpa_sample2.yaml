@@ -16,4 +16,5 @@ spec:
   - type: Resource
     resource:
       name: cpu
+      # NB: it's an absolute value, not a percentage, check documentation
       targetAverageValue: 500
