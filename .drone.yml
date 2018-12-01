@@ -41,7 +41,8 @@ pipeline:
     set: image.tag=v1beta1-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:8}
     wait: true
     when:
-      event: [push]
+      event: [deployment]
+      environment: [ci]
 
 
   deploy-stage:

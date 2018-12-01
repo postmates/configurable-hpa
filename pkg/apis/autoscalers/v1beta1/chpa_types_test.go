@@ -21,6 +21,7 @@ import (
 
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
+	autoscalingv2 "k8s.io/api/autoscaling/v2beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -30,6 +31,8 @@ func TestStorageCHPA(t *testing.T) {
 		Name:      "foo",
 		Namespace: "default",
 	}
+	curMetrics := make([]autoscalingv2.MetricStatus, 3)
+	curConditions := make([]autoscalingv2.HorizontalPodAutoscalerCondition, 3)
 	created := &CHPA{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "foo",
@@ -37,6 +40,10 @@ func TestStorageCHPA(t *testing.T) {
 		},
 		Spec: CHPASpec{
 			MaxReplicas: 100,
+		},
+		Status: CHPAStatus{
+			CurrentMetrics: curMetrics,
+			Conditions:     curConditions,
 		},
 	}
 	g := gomega.NewGomegaWithT(t)

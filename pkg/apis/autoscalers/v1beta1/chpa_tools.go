@@ -30,11 +30,7 @@ func (chpa_spec CHPASpec) String() string {
 	if chpa_spec.MinReplicas != nil {
 		minReplicas = fmt.Sprintf("%v", *chpa_spec.MinReplicas)
 	}
-	targetCPUUtilizationPercentage := "<nil>"
-	if chpa_spec.TargetCPUUtilizationPercentage != nil {
-		targetCPUUtilizationPercentage = fmt.Sprintf("%v", *chpa_spec.TargetCPUUtilizationPercentage)
-	}
-	ret := fmt.Sprintf("{Ref:%v/%v DFWS:%v UFWS:%v SULF:%v SULM:%v T:%v MinR:%v MaxR:%v TCPUUP:%v}",
+	ret := fmt.Sprintf("{Ref:%v/%v DFWS:%v UFWS:%v SULF:%v SULM:%v T:%v MinR:%v MaxR:%v M:%v}",
 		chpa_spec.ScaleTargetRef.Kind,
 		chpa_spec.ScaleTargetRef.Name,
 		chpa_spec.DownscaleForbiddenWindowSeconds,
@@ -44,19 +40,15 @@ func (chpa_spec CHPASpec) String() string {
 		chpa_spec.Tolerance,
 		minReplicas,
 		chpa_spec.MaxReplicas,
-		targetCPUUtilizationPercentage)
+		chpa_spec.Metrics)
 	return ret
 }
 
 func (chpa_status CHPAStatus) String() string {
-	curCPU := "<nil>"
-	if chpa_status.CurrentCPUUtilizationPercentage != nil {
-		curCPU = fmt.Sprintf("%v", *chpa_status.CurrentCPUUtilizationPercentage)
-	}
 	lastScaleTime := "<nil>"
 	if chpa_status.LastScaleTime != nil {
 		lastScaleTime = fmt.Sprintf("%v", *chpa_status.LastScaleTime)
 	}
-	ret := fmt.Sprintf("{LST:%v CR:%v DR:%v CCPUUP:%v}", lastScaleTime, chpa_status.CurrentReplicas, chpa_status.DesiredReplicas, curCPU)
+	ret := fmt.Sprintf("{LST:%v CR:%v DR:%v}", lastScaleTime, chpa_status.CurrentReplicas, chpa_status.DesiredReplicas)
 	return ret
 }

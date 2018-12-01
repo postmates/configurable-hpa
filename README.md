@@ -51,6 +51,11 @@ spec:
     name: chpa-example
   minReplicas: 1
   maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 50
 EOF
 ```
 
@@ -121,6 +126,18 @@ We don't want to leave the garbage behind
 kubectl delete deploy/my-load-generator deploy/chpa-example
 ```
 
+## Investigate problems
+
+There're two places where you can check problems with your CHPA:
+
+- CHPA object itself. It contains "Events" and "Conditions" that are filled by the CHPA controller. In case of any problem with the CHPA you should check these fields.
+
+    kubectl describe chpas.autoscalers.postmates.com chpa-example1
+
+- CHPA controller logs. The logs may contain information about controller problems (couldn't connect to the server, etc)
+
+    stern -n kube-system configurable-hpa
+
 # Development
 
 To perform development you have to store the sources on the following path
@@ -169,19 +186,18 @@ To get chpa-controller logs:
 
 Here's a list of things that must be done next:
 
+- catch exception + print stack
+- ScaleUpLimitPods + ScaleUpLimitPercentages
+- tests for scaleuplimit*
+- tests for incorrect chpa
+- Check how to deal with CHPA version change v1beta1 -> v1beta2
 - (done) Switch from v1.5.8 to v1.10.8 for replica_calculator to use the newest metrics-server functionality
 - (done) Check RBAC rules
 - (done) Check how several chpa objects works together
 - (done) Check OWNERship (solution: add `--cascade=false` parameter)
-- ScaleUpLimitPods + ScaleUpLimitPercentages
-- tests for scaleuplimit*
-- tests for incorrect chpa
-- Fix exponential backoff for reconcile queue
-- "FailedGetMetrics: unable to get metrics for resource cpu: no metrics returned from resource metrics API"
-- Add unittests to the CI pipeline
-- Add e2e tests
-- Add "events" system to the chpa (as in hpa) to show problems/events with each particular deployment scaling process
-- Add more checks into `isHPAValid` and `isHPASpecValid`
-- Add check that HPA is used for this particular Deployment/ReplicaSet before applying the CHPA
-- Check how to deal with CHPA version change v1beta1 -> v1beta2
-- (probably) log
+- (done) Fix exponential backoff for reconcile queue
+- (done) "FailedGetMetrics: unable to get metrics for resource cpu: no metrics returned from resource metrics API"
+- (done) Add unittests to the CI pipeline
+- (done) Add e2e tests
+- (done) Add "events" system to the chpa (as in hpa) to show problems/events with each particular deployment scaling process
+- (done) Properly log the chpa controller activity
