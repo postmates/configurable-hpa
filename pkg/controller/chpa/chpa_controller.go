@@ -103,15 +103,15 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	}
 }
 
-// when the CHPA is changed (status is changed, edited by the user, etc),
-// a new "UpdateEvent" is generated and passed to the "updatePredicate" function
-// if the function returns "true", the event is added to the "Reconcile" queue
-// if the function returns "false", the event is skipped
+// When the CHPA is changed (status is changed, edited by the user, etc),
+// a new "UpdateEvent" is generated and passed to the "updatePredicate" function.
+// If the function returns "true", the event is added to the "Reconcile" queue,
+// If the function returns "false", the event is skipped.
 func updatePredicate(ev event.UpdateEvent) bool {
 	oldObject := ev.ObjectOld.(*chpav1beta1.CHPA)
 	newObject := ev.ObjectNew.(*chpav1beta1.CHPA)
-	// return true only if the target object is changed
-	// all other object changes will be applied during next "Reconcile" call
+	// return true only if the target object has changed
+	// all other object changes will be applied during the next "Reconcile" call
 	res := newObject.Spec.ScaleTargetRef != oldObject.Spec.ScaleTargetRef
 	return res
 }
@@ -149,7 +149,7 @@ type ReconcileCHPA struct {
 
 // Reconcile reads that state of the cluster for a CHPA object and makes changes based on the state read
 // and what is in the CHPA.Spec
-// The implementation repeats kubernetes hpa implementation in v1.10.8
+// The implementation repeats kubernetes hpa implementation from v1.10.8
 
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
 // TODO: decide, what to use: patch or update in rbac

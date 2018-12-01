@@ -85,7 +85,7 @@ type CHPASpec struct {
 	// reference to scaled resource; horizontal pod autoscaler will learn the current resource consumption
 	// and will set the desired number of pods by using its Scale subresource.
 	ScaleTargetRef CrossVersionObjectReference `json:"scaleTargetRef"`
-	// specifications that will be used to calculated the desired replica count
+	// specifications that will be used to calculate the desired replica count
 	Metrics []autoscalingv2.MetricSpec `json:"metrics,omitempty"`
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=1000
