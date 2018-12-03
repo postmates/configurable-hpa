@@ -110,8 +110,8 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 func updatePredicate(ev event.UpdateEvent) bool {
 	oldObject := ev.ObjectOld.(*chpav1beta1.CHPA)
 	newObject := ev.ObjectNew.(*chpav1beta1.CHPA)
-	// add the chpa object to the queue only if the spec has changed
-	// status change should not lead to a requeue
+	// Add the chpa object to the queue only if the spec has changed.
+	// Status change should not lead to a requeue.
 	if !apiequality.Semantic.DeepEqual(newObject.Spec, oldObject.Spec) {
 		return true
 	}
@@ -186,8 +186,8 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 
 	if err := checkCHPAValidity(chpa); err != nil {
 		log.Printf("Got an invalid CHPA spec '%v': %v", request.NamespacedName, err)
-		// the chpa spec is incorrect (most likely, in "metrics" section) stop processing it
-		// when the spec is updated, the chpa will be re-added to the reconcile queue
+		// The chpa spec is incorrect (most likely, in "metrics" section) stop processing it
+		// When the spec is updated, the chpa will be re-added to the reconcile queue
 		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedSpecCheck", err.Error())
 		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionFalse, "FailedSpecCheck", "Invalid CHPA specification: %s", err)
 		return resStop, nil
@@ -212,19 +212,16 @@ func (r *ReconcileCHPA) Reconcile(request reconcile.Request) (reconcile.Result, 
 	}
 
 	if err := r.reconcileCHPA(chpa, deploy); err != nil {
-		// should never happen, actually
+		// Should never happen, actually.
 		log.Printf(err.Error())
 		r.eventRecorder.Event(chpa, v1.EventTypeWarning, "FailedProcessCHPA", err.Error())
 		setCondition(chpa, autoscalingv2.AbleToScale, v1.ConditionTrue, "FailedProcessCHPA", "Error happened while processing the CHPA")
-		// we shouldn't stop processing the CHPA, as it might be a temporal problem
-		return resRepeat, nil
+		return resStop, nil
 	}
 	return resRepeat, nil
 }
 
-// Function returns error only in case when we need to stop working with the CHPA spec
-// The only case for now is incorrect specification
-// All other cases are ok as it may be temporal problem and be fixed later by itself
+// Function returns an error only when we need to stop working with the CHPA spec
 func (r *ReconcileCHPA) reconcileCHPA(chpa *chpav1beta1.CHPA, deploy *appsv1.Deployment) (err error) {
 	defer func() {
 		if err1 := recover(); err1 != nil {
@@ -504,9 +501,8 @@ func checkCHPAValidity(chpa *chpav1beta1.CHPA) error {
 }
 
 func checkCHPAMetricsValidity(metrics []autoscalingv2.MetricSpec) (err error) {
-	// this function will not be needed for the vanilla k8s
-	// for now we check only nil pointers here as they crash the default controller algorithm
-	// and I want to make it as close to the vanilla one, as I can
+	// This function will not be needed for the vanilla k8s.
+	// For now we check only nil pointers here as they crash the default controller algorithm
 	for _, metric := range metrics {
 		switch metric.Type {
 		case "Object":
