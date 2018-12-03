@@ -158,7 +158,87 @@ class TestRaiseToMaxFast(HPATestCase):
                                     check_replicas(name, 1))
         self.assertTrue(res)
 
-# use parallel approach
+
+class TestIncorrectSpec(HPATestCase):
+    """ Incorrect CHPA Spec test """
+
+    def test_me(self):
+        """ test function """
+        # create an incorrect CHPA spec and make a usual 'raise to max' test
+        # we specify metricSourceType = Pods, while specify resource usage:
+        #  "metrics": [{
+        #    "type": "Pods",
+        #    "resource": {
+        #      "name": "cpu",
+        #      "targetAverageUtilization": 80
+        #    }}]
+        # it should be either:
+        #  "metrics": [{
+        #    "type": "Resource",
+        #    "resource": {
+        #      "name": "cpu",
+        #      "targetAverageUtilization": 80
+        #    }}]
+        # or
+        #  "metrics": [{
+        #    "type": "Pods",
+        #    "pods": {
+        #      "name": "cpu",
+        #      "targetAverageValue": 80
+        #    }}]
+        name = self.resource_name()
+        incorrect_chpa = chpa.CHPA("incorrect", 8, name, {"metricSourceType": "Pods"})
+        cmd = ["kubectl", "apply", "-f", incorrect_chpa.save_to_tmp_file()]
+        test_helper.check_output(cmd)
+
+        # add correct chpa
+        correct_chpa = chpa.CHPA(name, 8, name)
+        cmd = ["kubectl", "apply", "-f", correct_chpa.save_to_tmp_file()]
+        test_helper.check_output(cmd)
+
+        self.add_cpu_load(0.5)
+        # first scale up will be 1 -> 4
+        res = test_helper.run_until(self.LONG_TEST_TIMEOUT,
+                                    check_replicas(name, 4))
+        self.assertTrue(res)
+
+        self.remove_cpu_load()
+        # then it will go down 4 -> 1
+        res = test_helper.run_until(self.LONG_TEST_TIMEOUT,
+                                    check_replicas(name, 1))
+        self.assertTrue(res)
+
+
+class TestFixIncorrectSpec(HPATestCase):
+    """ Create incorrect CHPA spec and fix it to make it work """
+
+    def test_me(self):
+        """ test function """
+        # create an incorrect CHPA spec as in TestIncorrectSpec test
+        # and then fix it and check that the deployment is scaled
+        name = self.resource_name()
+        chpa_obj = chpa.CHPA(name, 8, name, {"metricSourceType": "Pods"})
+        cmd = ["kubectl", "apply", "-f", chpa_obj.save_to_tmp_file()]
+        test_helper.check_output(cmd)
+
+        # fix chpa specs
+        chpa_obj = chpa.CHPA(name, 8, name)
+        cmd = ["kubectl", "apply", "-f", chpa_obj.save_to_tmp_file()]
+        test_helper.check_output(cmd)
+
+        self.add_cpu_load(0.5)
+        # first scale up will be 1 -> 4
+        res = test_helper.run_until(self.LONG_TEST_TIMEOUT,
+                                    check_replicas(name, 4))
+        self.assertTrue(res)
+
+        self.remove_cpu_load()
+        # then it will go down 4 -> 1
+        res = test_helper.run_until(self.LONG_TEST_TIMEOUT,
+                                    check_replicas(name, 1))
+        self.assertTrue(res)
+
+# TODO: use parallel approach
 # https://stackoverflow.com/questions/4710142/can-pythons-unittest-test-in-parallel-like-nose-can
 
 
