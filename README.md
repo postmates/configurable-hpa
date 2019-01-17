@@ -1,7 +1,5 @@
 # Configurable HPA
 
-NB: The work is still in progress
-
 WARNING: If you want to delete your CHPA, do it carefully not to remove your deployment too. Read the "Quick Start Guide" below.
 
 WARNING: You should remove usual HPA before starting using CHPA. If you use both, the behaviour is undefined (they'll fight each other).
@@ -17,10 +15,11 @@ These parameters are specified either a cluster-wide, or hardcoded into the HPA 
 
 For more info about how HPA in v1.10.8 works and what these parameters means check [the internal sig-autoscaling document](https://docs.google.com/document/d/1Gy90Rbjazq3yYEUL-5cvoVBgxpzcJC9vcfhAkkhMINs/edit#), 
 
-This becomes a problem for us as we need to have some Services scaling up really fast (i.e. IPA during promos).
+This becomes a problem for us as we need to have some Services scaling up really fast and at the same time we need some Services scaling "as usual".
 So we implemented a [CRD (Custom Resource Definition)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions) 
 and a corresponding controller that will mimic vanilla HPA, and will be flexibly configurable.
 
+The skeleton of the controller is created with the help of [Kubebuilder](https://github.com/kubernetes-sigs/kubebuilder).
 
 # Quick Start Guide
 
