@@ -1,5 +1,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= quay.io/postmates/configurable-hpa
+
+# To perform tests we need a lot of additional packages the image, including kubebuilder
 BUILD_TAG ?= test-v2
 
 all: test manager
