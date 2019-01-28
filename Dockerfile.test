@@ -1,5 +1,6 @@
-FROM golang:1.11.1-alpine3.8
+FROM golang:1.11.5-alpine3.8
 
+# Variables for Kubebuilder
 ENV version=1.0.4
 ENV arch=amd64
 ENV checksum=3cc1b63202a786bf8418b7ed0c8167566dfc5e2f4a780dd9fb88e04580f6cdd2

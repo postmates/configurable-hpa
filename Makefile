@@ -2,7 +2,8 @@
 IMG ?= quay.io/postmates/configurable-hpa
 
 # To perform tests we need a lot of additional packages the image, including kubebuilder
-BUILD_TAG ?= test-v2
+# So we can't test in in the 'release' docker image
+TEST_IMAGE_TAG ?= test-v2
 
 all: test manager
 
@@ -51,10 +52,10 @@ docker-build: test
 
 # Build the docker image for test
 docker-build-test-image:
-	docker build . --squash -f Dockerfile.test -t ${IMG}:${BUILD_TAG}
+	docker build . --squash -f Dockerfile.test -t ${IMG}:${TEST_IMAGE_TAG}
 
 docker-push-test-image:
-	docker push ${IMG}:${BUILD_TAG}
+	docker push ${IMG}:${TEST_IMAGE_TAG}
 
 e2e:
 	cd tests; python -m unittest *.py
