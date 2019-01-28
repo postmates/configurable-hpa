@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.11.1-alpine3.8 as builder
+FROM golang:1.11.5-alpine3.8 as builder
 
 # Copy in the go src
 WORKDIR /go/src/github.com/postmates/configurable-hpa
