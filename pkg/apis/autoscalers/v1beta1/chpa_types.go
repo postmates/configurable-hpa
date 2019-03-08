@@ -32,33 +32,6 @@ type CrossVersionObjectReference struct {
 	APIVersion string `json:"apiVersion,omitempty"`
 }
 
-// Configurable HPA (CHPA) controller starts every 15 seconds, on every iteration it follows the instruction:
-//		* check all CHPA objects
-//		* for every CHPA object find the correspondend Deployment object
-//		* check metrics for all the Containers for all the Pods of the Deployment object
-//		* calculate the desired number of Replicas (terms Replicas and Pods mean the same in CHPA context)
-//		* start new Replicas
-//
-// Upscale Forbidden Window - is the duration window from the previous "ScaleUp" event
-//		for the particular CHPA object when we won't try to ScaleUp again
-// "Scale Up Limit" parameters limit the number of replicas for the next ScaleUp event.
-//      If the Pods metrics shows that that we should increase number of replicas,
-//      the algorithm will try to limit the increase by the "ScaleUpLimit":
-//			NextReplicas = min(ScaleUpLimit, DesiredReplicas)
-//		ScaleUpLimit is found as a maximum of an absolute number (ScaleUpLimitMinimum) and
-//		of a multiplication of currentReplicas by a koefficient (ScaleUpLimitFactor):
-//			ScaleUpLimit = max(ScaleUpLimitMinimum, ScaleUpLimitFactor * currentReplicas)
-
-// Examples:
-//		* currentReplicas = 1, ScaleUpLimitMinimum = 4, ScaleUpLimitFactor = 2
-//			=> ScaleUpLimit = 4
-//			i.e. if metrics shows that we should scale up to 10 Replicas, we'll scale up to 4 Replicas
-//			i.e. if metrics shows that we should scale up to 3 Replicas, we'll scale up to 3 Replicas
-//		* currentReplicas = 10, ScaleUpLimitMinimum = 4, ScaleUpLimitFactor = 3
-//		    => ScaleUpLimit = 30
-//			i.e. if metrics shows that we should scale up to 10 Replicas, we'll scale up to 10 Replicas
-//			i.e. if metrics shows that we should scale up to 40 Replicas, we'll scale up to 30 Replicas
-
 // specification of horizontal pod autoscaler
 // was copied from HorizontalPodAutoscalerSpec + HPAControllerConfiguration
 type CHPASpec struct {

@@ -1,129 +1,79 @@
 # Configurable HPA
 
-WARNING: If you want to delete your CHPA, do it carefully not to remove your deployment too. Read the "Quick Start Guide" below.
+**WARNING**: If you want to delete your CHPA, do it carefully not to remove your deployment too. Read the ["Quick Start Guide"](QuickStartGuide.md).
 
-WARNING: You should remove usual HPA before starting using CHPA. If you use both, the behaviour is undefined (they'll fight each other).
+**WARNING**: You should remove usual HPA before starting using CHPA. If you use both, the behaviour is undefined (they'll fight each other).
 
-Vanilla kubernetes [HPA (Horizontal Pod Autoscaler)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) doesn't allow to configure some HPA parameters, such as:
+Vanilla kubernetes [HPA (Horizontal Pod Autoscaler)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) in 1.11 version doesn't allow to configure some HPA parameters, such as:
 
  - [DownscaleForbiddenWindow](https://github.com/kubernetes/website/blob/snapshot-initial-v1.11/content/en/docs/tasks/run-application/horizontal-pod-autoscale.md#support-for-cooldowndelay)
  - [UpscaleForbiddenWindow](https://github.com/kubernetes/website/blob/snapshot-initial-v1.11/content/en/docs/tasks/run-application/horizontal-pod-autoscale.md#support-for-cooldowndelay)
  - Tolerance
- - ScaleUpLimit parameters (ScaleUpLimitFactor and ScaleUpLimitMinimum). 
+ - ScaleUpLimit parameters (ScaleUpLimitFactor and ScaleUpLimitMinimum).
 
 These parameters are specified either a cluster-wide, or hardcoded into the HPA code.
 
-For more info about how HPA in v1.10.8 works and what these parameters means check [the internal sig-autoscaling document](https://docs.google.com/document/d/1Gy90Rbjazq3yYEUL-5cvoVBgxpzcJC9vcfhAkkhMINs/edit#), 
+For more info about how HPA in v1.10.8 works and what these parameters means check [the internal sig-autoscaling document](https://docs.google.com/document/d/1Gy90Rbjazq3yYEUL-5cvoVBgxpzcJC9vcfhAkkhMINs/edit#),
 
 This becomes a problem for us as we need to have some Services scaling up really fast and at the same time we need some Services scaling "as usual".
-So we implemented a [CRD (Custom Resource Definition)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions) 
+So we implemented a [CRD (Custom Resource Definition)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions)
 and a corresponding controller that will mimic vanilla HPA, and will be flexibly configurable.
 
 The skeleton of the controller is created with the help of [Kubebuilder](https://github.com/kubernetes-sigs/kubebuilder).
 
-# Quick Start Guide
+## CHPA Algorithm
 
-## Create a deployment
+Configurable HPA (CHPA) controller starts every 15 seconds, on every iteration it follows the instruction:
 
-Let's start a deployment `chpa-example`, that will imitate your real application:
+* check all CHPA objects
+* for every CHPA object:
+  * find the correspondend Deployment object
+  * check metrics for all the Containers for all the Pods of the Deployment object
+  * calculate the desired number of Replicas (terms Replicas and Pods mean the same in CHPA context)
+  * adjust Replica Number
 
-    kubectl run chpa-example --image=k8s.gcr.io/hpa-example --requests=cpu=200m --expose --port=80
+## CHPA Parameters
 
-## Create a CHPA
+Each CHPA object can have the following parameters set:
 
-Then let's create a CHPA manifest that'll specify forbidden windows, 
-min and max replicas, and our deployment name.
+* **UpscaleForbiddenWindowSeconds** - is the duration window from the previous `ScaleUp` event
+    for the particular CHPA object when we won't try to ScaleUp again
+* "Scale Up Limit" parameters (**ScaleUpLimitFactor** and **ScaleUpLimitMinimum**) limit the number of replicas for the next `ScaleUp` event.
 
-```bash
-cat > chpa.yaml << EOF
-apiVersion: autoscalers.postmates.com/v1beta1
-kind: CHPA
-metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
-  name: chpa-example
-spec:
-  downscaleForbiddenWindowSeconds: 15
-  upscaleForbiddenWindowSeconds: 15
-  scaleTargetRef:
-    kind: Deployment
-    name: chpa-example
-  minReplicas: 1
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      targetAverageUtilization: 50
-EOF
-```
+    If the Pods metrics shows that that we should increase number of replicas,
+    the algorithm will try to limit the increase by the `ScaleUpLimit`
 
-Let's apply the manifest:
-
-    kubectl apply -f chpa.yaml
-
-NB: the deployment and the chpa for that deployment should be started in the same namespace!
-
-## Add some load
-
-Now, let's add some load for our deployment to check how it will scale:
+    `ScaleUpLimit` is found as a maximum of an absolute number (`ScaleUpLimitMinimum`) and
+    of a multiplication of currentReplicas by a koefficient (`ScaleUpLimitFactor`):
 
 ```
-$ kubectl run -i --tty my-load-generator --image=busybox /bin/sh
-/ #     # we are in the k8s container, let's create some load
-/ # while true; do wget -q -O- chpa-example; done;
-OK!OK!OK!OK!OK!OK!OK!...
+    ScaleUpLimit = max(ScaleUpLimitMinimum, ScaleUpLimitFactor * currentReplicas)
+    NextReplicas = min(ScaleUpLimit, DesiredReplicas)
 ```
 
-## Check how deployment scales
+* **DownscaleForbiddenWindowSeconds** - the same as `UpscaleForbiddenWindowSeconds`
+    but for `ScaleDown`
+* **Tolerance** - how sensitive CHPA to the metrics change. Default value is `0.1`.
 
-Run in a separate shell:
+    E.g. if
 
-```
-❯ kubectl get deploy chpa-example -w
-NAME            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-chpa-example   1         1         1            1           1h55m
-chpa-example   4     1     1     1     1h55m
-chpa-example   4     1     1     1     1h55m
-chpa-example   4     1     1     1     1h55m
-chpa-example   4     4     4     1     1h55m
-chpa-example   4     4     4     2     1h56m
-chpa-example   4     4     4     3     1h56m
-chpa-example   4     4     4     4     1h56m
-chpa-example   7     4     4     4     1h57m
-chpa-example   7     4     4     4     1h57m
-chpa-example   7     4     4     4     1h57m
-chpa-example   7     7     7     4     1h57m
-chpa-example   7     7     7     5     1h57m
-chpa-example   7     7     7     6     1h58m
-chpa-example   7     7     7     7     1h58m
-chpa-example   1     7     7     7     1h59m
-chpa-example   1     7     7     7     1h59m
-chpa-example   1     1     1     1     1h59m
-```
+    `Math.abs(1 - RealUtilization/TargetUtilization) < Tolerance`
 
-As you can see, the deployment scaled up from 1 to 7 instances in 2 minutes.
-Then it scaled down to 1 replicas again.
+    Then the CHPA won't change number of replicas.
+    Use with care!
 
-That would be impossible with the vanilla HPA, where `ScaleUpForbiddenWindow` is 3min and `ScaleDownForbiddenWindow` is 5min.
+## Configuration Examples
 
-## Delete the CHPA
+`currentReplicas = 1, ScaleUpLimitMinimum = 4, ScaleUpLimitFactor = 2`
 
-If you decided to stop using the CHPA, you should carefully remove the CHPA without removing the 
-deployment itself. To do it just add `--cascade=false` parameter to the `kubect delete` command:
+* => ScaleUpLimit = 4
+* i.e. if metrics shows that we should scale up to 10 Replicas, we'll scale up to 4 Replicas
+* i.e. if metrics shows that we should scale up to 3 Replicas, we'll scale up to 3 Replicas
 
-    kubectl delete chpas.autoscalers.postmates.com chpa-example --cascade=false
-
-The thing is that CHPA is registered as an [Owner](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.10/#ownerreference-v1-meta) for the deployment.
-When we delete the owner of the deployment, the deployment is garbage collected.
-
-## Clean everything else
-
-We don't want to leave the garbage behind
-
-```bash
-kubectl delete deploy/my-load-generator deploy/chpa-example
-```
+`currentReplicas = 10, ScaleUpLimitMinimum = 4, ScaleUpLimitFactor = 3`
+* => ScaleUpLimit = 30
+* i.e. if metrics shows that we should scale up to 10 Replicas, we'll scale up to 10 Replicas
+* i.e. if metrics shows that we should scale up to 40 Replicas, we'll scale up to 30 Replicas
 
 ## Investigate problems
 
@@ -147,8 +97,8 @@ To run tests you need to have [kubebuilder](https://book.kubebuilder.io/) instal
 
     make test
 
-To run e2e test you need to have a kubectl in your `$PATH` and have 
-kubectl context configured. 
+To run e2e test you need to have a kubectl in your `$PATH` and have kubectl context configured.
+
 The test will create several Deployments and Services, prepare some load for them and check that the Deployment is scaled
 
     make e2e
