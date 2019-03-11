@@ -27,7 +27,7 @@ Configurable HPA (CHPA) controller starts every 15 seconds, on every iteration i
 
 * check all CHPA objects
 * for every CHPA object:
-  * find the correspondend Deployment object
+  * find the correspondent Deployment object
   * check metrics for all the Containers for all the Pods of the Deployment object
   * calculate the desired number of Replicas (terms Replicas and Pods mean the same in CHPA context)
   * adjust Replica Number
@@ -44,7 +44,7 @@ Each CHPA object can have the following parameters set:
     the algorithm will try to limit the increase by the `ScaleUpLimit`
 
     `ScaleUpLimit` is found as a maximum of an absolute number (`ScaleUpLimitMinimum`) and
-    of a multiplication of currentReplicas by a koefficient (`ScaleUpLimitFactor`):
+    of a multiplication of currentReplicas by a coefficient (`ScaleUpLimitFactor`):
 
 ```
     ScaleUpLimit = max(ScaleUpLimitMinimum, ScaleUpLimitFactor * currentReplicas)
