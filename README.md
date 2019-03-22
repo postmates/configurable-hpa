@@ -40,7 +40,7 @@ Each CHPA object can have the following parameters set:
     for the particular CHPA object when we won't try to ScaleUp again
 * "Scale Up Limit" parameters (**ScaleUpLimitFactor** and **ScaleUpLimitMinimum**) limit the number of replicas for the next `ScaleUp` event.
 
-    If the Pods metrics shows that that we should increase number of replicas,
+    If the Pods metrics show that that we should increase number of replicas,
     the algorithm will try to limit the increase by the `ScaleUpLimit`
 
     `ScaleUpLimit` is found as a maximum of an absolute number (`ScaleUpLimitMinimum`) and
