@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= quay.io/postmates/configurable-hpa
+IMG ?= postmates/configurable-hpa
 
 # To perform tests we need a lot of additional packages the image, including kubebuilder
 # So we can't test in in the 'release' docker image

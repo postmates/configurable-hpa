@@ -22,7 +22,7 @@ spec:
       serviceAccountName: kube-system-configurable-hpa-controller
       containers:
         - name: {{ .Chart.Name }}
-          image: "quay.io/postmates/configurable-hpa:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.name }}:{{ .Values.image.tag }}"
           imagePullPolicy: IfNotPresent
           resources:
 {{ toYaml .Values.resources | indent 12 }}
