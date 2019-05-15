@@ -142,11 +142,15 @@ There're two places where you can check problems with your CHPA:
 
 - CHPA object itself. It contains "Events" and "Conditions" that are filled by the CHPA controller. In case of any problem with the CHPA, you should check these fields.
 
-    kubectl describe chpas.autoscalers.postmates.com chpa-example1
+```bash
+kubectl describe chpas.autoscalers.postmates.com chpa-example1
+```
 
 - CHPA controller logs. The logs may contain information about controller problems, e.g., could not connect to the server.
 
-    stern -n kube-system configurable-hpa
+```bash
+stern -n kube-system configurable-hpa
+```
 
 
 **WARNING**: If you want to delete your CHPA, do it carefully not to remove your deployment too. Read the ["Quick Start Guide"](QuickStartGuide.md).
