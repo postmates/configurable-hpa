@@ -16,28 +16,28 @@ Configurable HPA (CHPA) is a CRD controller that repeats the vanilla HPA v1.11 w
 
 ## Usage Guide
 
-The guide is located in a [separate document](QuickStartGuide.md)
+Please view the quick start guide [here](QuickStartGuide.md).
 
 ## Motivation
 
-Vanilla kubernetes [HPA (Horizontal Pod Autoscaler)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) in the version v1.11 allows to configure:
+The existing vanilla Kubernetes [HPA (Horizontal Pod Autoscaler)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) in version v1.11 allows one to configure:
 
-- maxReplicas - the upper limit of replicas to which the autoscaler can scale up.
-- minReplicas - the lower limit of replicas.
-- metrics - the specification for which to use to calculate the desired replica count.
+- maxReplicas - the upper limit of replicas to which the autoscaler can scale up
+- minReplicas - the lower limit of replicas
+- metrics - the specification for which to use to calculate the desired replica count
 
 The off the shelf HPA only supports one cluster level configuration parameter that influences how fast the cluster is scaled down:
 
-- [--horizontal-pod-autoscaler-downscale-stabilization-window](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#algorithm-details)   (default to 5 min)
+- [--horizontal-pod-autoscaler-downscale-stabilization-window](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#algorithm-details)   (defaults to 5 min)
 
 And a couple of hard-coded constants that specify how fast the cluster can scale up:
 
 - [scaleUpLimitFactor = 2.0](https://github.com/kubernetes/kubernetes/blob/7ba79c31838632fa535f9aaab516276c2160a09d/pkg/controller/podautoscaler/horizontal.go#L55)
 - [scaleUpLimitMinimum = 4.0](https://github.com/kubernetes/kubernetes/blob/7ba79c31838632fa535f9aaab516276c2160a09d/pkg/controller/podautoscaler/horizontal.go#L56)
 
-For more info about how HPA works and what these parameters mean check [the internal sig-autoscaling document](https://docs.google.com/document/d/1Gy90Rbjazq3yYEUL-5cvoVBgxpzcJC9vcfhAkkhMINs/edit#),
+For more info about how HPA works and what these parameters mean check [the internal sig-autoscaling document](https://docs.google.com/document/d/1Gy90Rbjazq3yYEUL-5cvoVBgxpzcJC9vcfhAkkhMINs/edit#).
 
-There’s no parameter that could be set per HPA to control the scale velocity of one particular cluster, which can be problematic for applications that need to scale faster or slower than others.
+There’s no parameter in the vanilla Kubernetes HPA that could be set per HPA to control the scale velocity of one particular cluster, which can be problematic for applications that need to scale faster or slower than others.
 
 So we implemented a [CRD (Custom Resource Definition)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions)
 and a controller that mimics vanilla HPA, and is flexibly configurable.
@@ -59,7 +59,7 @@ Configurable HPA (CHPA) controller starts every 15 seconds. On every iteration i
 
 - **UpscaleForbiddenWindowSeconds** - is the duration window from the previous `ScaleUp` event
     for the particular CHPA object when we won't try to ScaleUp again
-- **ScaleUpLimitFactor** and **ScaleUpLimitMinimum** limit the number of replicas for the next `ScaleUp` event.
+- **ScaleUpLimitFactor** and **ScaleUpLimitMinimum** limit the number of replicas for the next `ScaleUp` event
 
     If the Pods metrics show that we should increase the number of replicas,
     the algorithm tries to limit the increase by the `ScaleUpLimit`
@@ -72,10 +72,10 @@ Configurable HPA (CHPA) controller starts every 15 seconds. On every iteration i
     NextReplicas = min(ScaleUpLimit, DesiredReplicas)
 ```
 
-- **DownscaleForbiddenWindowSeconds** - the same as `UpscaleForbiddenWindowSeconds`  for `ScaleDown`.
-- **Tolerance** - how sensitive CHPA to the metrics changes. The default value is `0.1`.
+- **DownscaleForbiddenWindowSeconds** - the same as `UpscaleForbiddenWindowSeconds`  for `ScaleDown`
+- **Tolerance** - how sensitive CHPA to the metrics changes. The default value is `0.1`
 
-    E.g., if
+    eg., if
 
     `Math.abs(1 - RealUtilization/TargetUtilization) < Tolerance`
 
@@ -124,11 +124,11 @@ To run tests, you need to have [kubebuilder](https://book.kubebuilder.io/) insta
 
 To run e2e test, you need to have a kubectl in your `$PATH` and have kubectl context configured.
 
-The test creates several Deployments and Services, prepare some load for them and checks that the Deployment is scaled
+The test creates several Deployments and Services, prepares some load for them and confirms that the Deployment is scaled
 
     make e2e
 
-WARNING: Do not stop the test; otherwise it won't be able to clean all the test resources automatically.
+WARNING: Do not stop the test, otherwise it won't be able to clean all the test resources automatically.
 
 To manually clean all the resources for the tests:
 
@@ -151,7 +151,7 @@ There're two places where you can check problems with your CHPA:
 
 **WARNING**: If you want to delete your CHPA, do it carefully not to remove your deployment too. Read the ["Quick Start Guide"](QuickStartGuide.md).
 
-**WARNING**: You should remove usual HPA before starting using CHPA. If you use both, the behavior is undefined (they'll fight each other).
+**WARNING**: You should remove the vanilla HPA before starting to use CHPA. If you use both, the behavior is undefined (they'll fight each other).
 
 The skeleton of the controller is created with the help of [Kubebuilder](https://github.com/kubernetes-sigs/kubebuilder).
 
