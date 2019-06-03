@@ -1,5 +1,6 @@
 image:
   tag: stable
+  name: postmates/configurable-hpa
 
 resources: {}
   # Uncomment and set proper value some time ago
