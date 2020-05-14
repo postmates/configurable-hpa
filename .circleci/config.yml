@@ -39,8 +39,8 @@ jobs:
       - image: quay.io/reactiveops/ci-images:v11.3-alpine
     steps:
       - checkout
-      - run: git submodule sync
-      - run: git submodule update --init
+      # - run: git submodule sync
+      # - run: git submodule update --init
       - setup_remote_docker
       - *set_environment_variables
       - run:
