@@ -9,38 +9,13 @@ references:
         echo 'export CI_BRANCH=$CIRCLE_BRANCH' >> ${BASH_ENV}
         echo 'export CI_BUILD_NUM=$CIRCLE_BUILD_NUM' >> ${BASH_ENV}
         echo 'export CI_TAG=$CIRCLE_TAG' >> ${BASH_ENV}
-        #        echo 'export ROK8S_INSTALL_PATH=${HOME}' >> ${BASH_ENV}
-        #echo 'export ROK8S_DOCKER_BUILD_EXTRAARGS="--build-arg TRAVIS_BUILD_NUMBER=${CI_TAG:-${CI_SHA1}}"' >> ${BASH_ENV}
 
 jobs:
-  test:
-    working_directory: /go/src/github.com/fairwindsops/configurable-hpa
-    docker:
-      - image: circleci/golang:1.12
-    steps:
-      - checkout
-      - *set_environment_variables
-      # - run:
-      #     name: lint
-      #     command: |
-      #       go get -u golang.org/x/lint/golint
-      #       golint -set_exit_status ./... | tee golint-report.out
-      #       test -z $(go fmt ./...)
-      - run:
-          name: test
-          command: |
-            go test -v --bench --benchmem -coverprofile=coverage.txt -covermode=atomic ./pkg/...
-            go vet 2> govet-report.out
-            go tool cover -html=coverage.txt -o cover-report.html
-      - run: bash <(curl -s https://codecov.io/bash) -t $CODECOV_TOKEN
-
   imagebuild:
     docker:
       - image: quay.io/reactiveops/ci-images:v11.3-alpine
     steps:
       - checkout
-      # - run: git submodule sync
-      # - run: git submodule update --init
       - setup_remote_docker
       - *set_environment_variables
       - run:
