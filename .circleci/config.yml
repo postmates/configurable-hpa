@@ -20,12 +20,12 @@ jobs:
     steps:
       - checkout
       - *set_environment_variables
-      - run:
-          name: lint
-          command: |
-            go get -u golang.org/x/lint/golint
-            golint -set_exit_status ./... | tee golint-report.out
-            test -z $(go fmt ./...)
+      # - run:
+      #     name: lint
+      #     command: |
+      #       go get -u golang.org/x/lint/golint
+      #       golint -set_exit_status ./... | tee golint-report.out
+      #       test -z $(go fmt ./...)
       - run:
           name: test
           command: |
