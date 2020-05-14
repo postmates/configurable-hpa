@@ -22,10 +22,12 @@ jobs:
       - run: git submodule update --init
       - setup_remote_docker
       - *set_environment_variables
+      - run: go get -v -t -d ./...
+      - run: go test -v ./...
       - run:
           name: Warm Docker cache
           command: |
-            cp configurable-hpa/LICENSE.txt .
+            # cp configurable-hpa/LICENSE.txt .
             docker-pull -f ${ROK8S_CONFIG}
       - run:
           name: Docker build
