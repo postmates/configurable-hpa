@@ -1,3 +1,7 @@
+# Now Archived and Forked
+_configurable-hpa_ will not be maintained in this repository going forward. Please use, create issues on, and make PRs to the fork of _configurable-hpa_ located [here](https://github.com/gliush/configurable-hpa).
+
+
 # Configurable HPA
 
 Configurable HPA (CHPA) is a CRD controller that repeats the vanilla HPA v1.11 while providing more configuration parameters.
