@@ -1,0 +1,12 @@
+image:
+  tag: stable
+  name: postmates/configurable-hpa
+api_version : "v1"
+resources: {}
+  # Uncomment and set proper value some time ago
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
