@@ -1,4 +1,4 @@
-apiVersion: autoscalers.postmates.com/v1beta1
+apiVersion: autoscalers.postmates.com/v1
 kind: CHPA
 metadata:
   labels:

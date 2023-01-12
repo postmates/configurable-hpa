@@ -88,10 +88,12 @@ spec:
               conditions:
                 items:
                   type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 type: array
               currentMetrics:
                 items:
                   type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 type: array
               currentReplicas:
                 format: int32
@@ -111,6 +113,7 @@ spec:
             - currentMetrics
             - conditions
             type: object
+            x-kubernetes-preserve-unknown-fields: true
   # The conversion section is introduced in Kubernetes 1.13+ with a default value of
   # None conversion (strategy sub-field set to None).
   conversion:
