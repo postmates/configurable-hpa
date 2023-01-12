@@ -23,6 +23,9 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.name }}:{{ .Values.image.tag }}"
+          env:
+          - name: api_version
+            value: {{ .Values.api_version }}
           imagePullPolicy: IfNotPresent
           resources:
 {{ toYaml .Values.resources | indent 12 }}
