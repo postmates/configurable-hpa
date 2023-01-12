@@ -1,7 +1,7 @@
 image:
   tag: stable
   name: postmates/configurable-hpa
-
+api_version : "v1"
 resources: {}
   # Uncomment and set proper value some time ago
   # limits:
